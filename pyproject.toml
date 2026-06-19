@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-services"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "Seungbin Yim", email = "ysb06@hotmail.com"},
+]
+dependencies = [
+    "openai-whisper>=20250625",
+    "whisperx>=3.8.5",
+    "pyannote-audio>=4.0.4",
+    "huggingface-hub>=0.36.2",
+    "python-dotenv>=1.0.1",
+    "tqdm>=4.66.0",
+    "google-api-python-client>=2.197.0",
+]
+requires-python = "==3.11.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = true
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
