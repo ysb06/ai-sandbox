@@ -53,6 +53,7 @@ def download(
         "merge_output_format": "mp4",
         "outtmpl": str(destination / f"vid_{video_id}.%(ext)s"),
         "noplaylist": True,
+        "js_runtimes": {"node": {}},
     }
     url = YOUTUBE_WATCH_URL.format(video_id=video_id)
 

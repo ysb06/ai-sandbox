@@ -1,10 +1,12 @@
 import argparse
 import hashlib
 import json
-from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from googleapiclient.discovery import build
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ytcrawl import db
@@ -29,16 +31,31 @@ PRESET_QUERIES: dict[str, str] = {
 }
 
 
+@dataclass(frozen=True)
+class SearchVideoRecord:
+    id: int
+    video_id: str | None
+
+
+@dataclass(frozen=True)
+class SearchSaveResult:
+    run_id: int | None
+    item_count: int
+    video_records: tuple[SearchVideoRecord, ...] = ()
+    skipped: bool = False
+    skipped_run_id: int | None = None
+
+
 def resolve_preset(args: argparse.Namespace) -> str | None:
     if args.query:
         return None
-    return args.preset or DEFAULT_PRESET
+    return args.preset
 
 
 def resolve_query(args: argparse.Namespace) -> str:
     if args.query:
         return args.query
-    return PRESET_QUERIES[resolve_preset(args)]
+    return PRESET_QUERIES.get(args.preset, " ")
 
 
 def build_search_params(args: argparse.Namespace, page_token: str | None = None) -> dict[str, Any]:
@@ -87,13 +104,43 @@ def create_youtube_client(api_key: str) -> Any:
     return build("youtube", "v3", developerKey=api_key, cache_discovery=False)
 
 
-def run_search_youtube(
+def fetch_search_response(
+    args: argparse.Namespace,
+    api_key: str,
+    *,
+    page_token: str | None = None,
+) -> dict[str, Any]:
+    youtube = create_youtube_client(api_key)
+    params = build_search_params(args, page_token=page_token)
+    return youtube.search().list(**params).execute(num_retries=0)
+
+
+def run_search_json(
+    args: argparse.Namespace,
+    api_key: str,
+    output_path: str | Path,
+) -> int:
+    response = fetch_search_response(
+        args,
+        api_key,
+        page_token=getattr(args, "page_token", None),
+    )
+
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(response, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"Saved raw YouTube search response to {output}")
+    return 0
+
+
+def save_search_youtube(
     args: argparse.Namespace,
     api_key: str,
     db_url: str,
-    *,
-    youtube_factory: Callable[[str], Any] = create_youtube_client,
-) -> int:
+) -> SearchSaveResult:
     query = resolve_query(args)
     preset = resolve_preset(args)
     request_hash = build_request_hash(
@@ -117,17 +164,16 @@ def run_search_youtube(
             )
             if latest_run is not None:
                 if latest_run.next_page_token is None:
-                    print(
-                        "No next page token for latest matching search run "
-                        f"{latest_run.id}; no new search performed."
+                    return SearchSaveResult(
+                        run_id=None,
+                        item_count=0,
+                        skipped=True,
+                        skipped_run_id=latest_run.id,
                     )
-                    return 0
                 page_token = latest_run.next_page_token
                 page = latest_run.page + 1
 
-    youtube = youtube_factory(api_key)
-    params = build_search_params(args, page_token=page_token)
-    response = youtube.search().list(**params).execute(num_retries=0)
+    response = fetch_search_response(args, api_key, page_token=page_token)
 
     with Session(engine) as session:
         run = db.save_search_response(
@@ -143,7 +189,16 @@ def run_search_youtube(
         )
         run_id = run.id
         item_count = run.item_count
+        video_records = tuple(
+            SearchVideoRecord(id=video.id, video_id=video.video_id)
+            for video in session.scalars(
+                select(db.Video).where(db.Video.search_id == run.id).order_by(db.Video.id)
+            )
+        )
         session.commit()
 
-    print(f"Saved {item_count} videos from search run {run_id} to {db_url}")
-    return 0
+    return SearchSaveResult(
+        run_id=run_id,
+        item_count=item_count,
+        video_records=video_records,
+    )

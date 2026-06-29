@@ -58,6 +58,7 @@ class Video(Base):
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     publishTime: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    path: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 def create_engine_for_url(db_url: str) -> Engine:

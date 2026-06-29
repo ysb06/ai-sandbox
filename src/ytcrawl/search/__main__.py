@@ -1,22 +1,17 @@
 import argparse
 import os
 import sys
-from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from collections.abc import Mapping, Sequence
 
 from dotenv import load_dotenv
 
-from ytcrawl.crawler import run_crawl_youtube
-from ytcrawl.downloader.youtube import download as download_youtube
-from ytcrawl.search.youtube import PRESET_QUERIES
-
-DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
+from ytcrawl.search.youtube import PRESET_QUERIES, run_search_json
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="ytcrawl",
-        description="Search YouTube, store results, and download matching videos.",
+        prog="ytcrawl.search",
+        description="Save a raw YouTube search.list response as JSON.",
     )
     parser.add_argument("--query", help="Direct YouTube search query")
     parser.add_argument(
@@ -26,18 +21,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--published-after", dest="published_after")
     parser.add_argument("--published-before", dest="published_before")
-    parser.add_argument(
-        "--output-dir",
-        required=True,
-        help="Directory for downloaded videos",
-    )
+    parser.add_argument("--page-token", dest="page_token")
+    parser.add_argument("--output", required=True, help="Path to the raw JSON output file")
     return parser.parse_args(argv)
 
 
 def main(
     argv: Sequence[str] | None = None,
     *,
-    db_url: str = DEFAULT_DB_URL,
     env: Mapping[str, str] | None = None,
 ) -> int:
     if env is None:
@@ -50,7 +41,7 @@ def main(
         print("YOUTUBE_API_KEY is required.", file=sys.stderr)
         return 2
 
-    return run_crawl_youtube(args, api_key, db_url)
+    return run_search_json(args, api_key, args.output)
 
 
 if __name__ == "__main__":
