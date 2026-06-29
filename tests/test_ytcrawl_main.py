@@ -150,6 +150,7 @@ class YtCrawlPersistenceTests(unittest.TestCase):
                 "preset",
                 "published_after",
                 "published_before",
+                "request_hash",
                 "part",
                 "search_type",
                 "max_results",
@@ -162,6 +163,7 @@ class YtCrawlPersistenceTests(unittest.TestCase):
                 "total_results",
                 "results_per_page",
                 "item_count",
+                "page",
             },
             column_names,
         )
@@ -179,6 +181,8 @@ class YtCrawlPersistenceTests(unittest.TestCase):
                 published_after="2026-06-24T00:00:00Z",
                 published_before="2026-06-25T00:00:00Z",
                 fixed_params=youtube_search.FIXED_SEARCH_PARAMS,
+                request_hash="hash-1",
+                page=1,
                 response=response,
             )
             run_id = run.id
@@ -229,6 +233,8 @@ class YtCrawlPersistenceTests(unittest.TestCase):
                 published_after=None,
                 published_before=None,
                 fixed_params=youtube_search.FIXED_SEARCH_PARAMS,
+                request_hash="hash-1",
+                page=1,
                 response=response,
             )
             second_run = db.save_search_response(
@@ -238,6 +244,8 @@ class YtCrawlPersistenceTests(unittest.TestCase):
                 published_after=None,
                 published_before=None,
                 fixed_params=youtube_search.FIXED_SEARCH_PARAMS,
+                request_hash="hash-2",
+                page=1,
                 response=response,
             )
             first_run_id = first_run.id
@@ -298,6 +306,32 @@ class YtCrawlPersistenceTests(unittest.TestCase):
                 )
 
         self.assertEqual(exit_code, 2)
+
+    def test_download_command_does_not_require_youtube_api_key(self):
+        calls = []
+
+        def fake_download(video_id, output_dir):
+            calls.append((video_id, output_dir))
+            return Path(output_dir) / f"vid_{video_id}.mp4"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                exit_code = ytcrawl_main.main(
+                    [
+                        "download",
+                        "--video-id",
+                        "dQw4w9WgXcQ",
+                        "--output-dir",
+                        tmpdir,
+                    ],
+                    env={},
+                    download_youtube_video=fake_download,
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(calls, [("dQw4w9WgXcQ", tmpdir)])
+        self.assertIn("vid_dQw4w9WgXcQ.mp4", stdout.getvalue())
 
 
 if __name__ == "__main__":

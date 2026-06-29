@@ -1,4 +1,6 @@
 import argparse
+import hashlib
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -39,14 +41,46 @@ def resolve_query(args: argparse.Namespace) -> str:
     return PRESET_QUERIES[resolve_preset(args)]
 
 
-def build_search_params(args: argparse.Namespace) -> dict[str, Any]:
+def build_search_params(args: argparse.Namespace, page_token: str | None = None) -> dict[str, Any]:
     params = dict(FIXED_SEARCH_PARAMS)
     params["q"] = resolve_query(args)
     if args.published_after:
         params["publishedAfter"] = args.published_after
     if args.published_before:
         params["publishedBefore"] = args.published_before
+    if page_token:
+        params["pageToken"] = page_token
     return params
+
+
+def build_request_hash(
+    *,
+    query: str,
+    preset: str | None,
+    published_after: str | None,
+    published_before: str | None,
+    fixed_params: dict[str, Any],
+) -> str:
+    payload = {
+        "query": query,
+        "preset": preset,
+        "published_after": published_after,
+        "published_before": published_before,
+        "fixed_params": {
+            "part": fixed_params["part"],
+            "type": fixed_params["type"],
+            "maxResults": int(fixed_params["maxResults"]),
+            "regionCode": fixed_params["regionCode"],
+            "safeSearch": fixed_params["safeSearch"],
+            "videoLicense": fixed_params["videoLicense"],
+        },
+    }
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def create_youtube_client(api_key: str) -> Any:
@@ -60,22 +94,51 @@ def run_search_youtube(
     *,
     youtube_factory: Callable[[str], Any] = create_youtube_client,
 ) -> int:
-    youtube = youtube_factory(api_key)
-
-    params = build_search_params(args)
-    response = youtube.search().list(**params).execute(num_retries=0)
     query = resolve_query(args)
+    preset = resolve_preset(args)
+    request_hash = build_request_hash(
+        query=query,
+        preset=preset,
+        published_after=args.published_after,
+        published_before=args.published_before,
+        fixed_params=FIXED_SEARCH_PARAMS,
+    )
+    page = 1
+    page_token = None
 
     engine = db.create_engine_for_url(db_url)
     db.create_schema(engine)
+
+    with Session(engine) as session:
+        if getattr(args, "next_page", True):
+            latest_run = db.find_latest_matching_search_run(
+                session,
+                request_hash=request_hash,
+            )
+            if latest_run is not None:
+                if latest_run.next_page_token is None:
+                    print(
+                        "No next page token for latest matching search run "
+                        f"{latest_run.id}; no new search performed."
+                    )
+                    return 0
+                page_token = latest_run.next_page_token
+                page = latest_run.page + 1
+
+    youtube = youtube_factory(api_key)
+    params = build_search_params(args, page_token=page_token)
+    response = youtube.search().list(**params).execute(num_retries=0)
+
     with Session(engine) as session:
         run = db.save_search_response(
             session,
             query=query,
-            preset=resolve_preset(args),
+            preset=preset,
             published_after=args.published_after,
             published_before=args.published_before,
             fixed_params=FIXED_SEARCH_PARAMS,
+            request_hash=request_hash,
+            page=page,
             response=response,
         )
         run_id = run.id

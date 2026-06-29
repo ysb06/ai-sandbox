@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:211d80615c95c5cc4a15659f92d39b3ef2b55761be507f80bf08132078bb15fe"
+content_hash = "sha256:f9373f5b6181e08b0e83266de653c68f17434e6aa71476d9e493b044e45ceb0d"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -2027,4 +2027,13 @@ files = [
     {file = "yarl-1.24.2-cp311-cp311-win_arm64.whl", hash = "sha256:b32c37a7a337e90822c45797bf3d79d60875cfcccd3ecc80e9f453d87026c122"},
     {file = "yarl-1.24.2-py3-none-any.whl", hash = "sha256:2783d9226db8797636cd6896e4de81feed252d1db72265686c9558d97a4d94b9"},
     {file = "yarl-1.24.2.tar.gz", hash = "sha256:9ac374123c6fd7abf64d1fec93962b0bd4ee2c19751755a762a72dd96c0378f8"},
+]
+
+[[package]]
+name = "yt-dlp"
+version = "2026.6.9"
+summary = ""
+files = [
+    {file = "yt_dlp-2026.6.9-py3-none-any.whl", hash = "sha256:442ba4c75724b9496144c8434b617962ee08d0ee7c26ec663848fe9b78d5a3e4"},
+    {file = "yt_dlp-2026.6.9.tar.gz", hash = "sha256:d50fcb95f48d61bedde33e408c1881d4c279e51c31354a599ce09e96ba0f4b86"},
 ]

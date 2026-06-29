@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, select
 from sqlalchemy import create_engine as sqlalchemy_create_engine
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
@@ -23,6 +23,7 @@ class YouTubeSearchRun(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     query: Mapped[str] = mapped_column(String(512), nullable=False)
     preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
     published_after: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -39,6 +40,7 @@ class YouTubeSearchRun(Base):
     total_results: Mapped[int | None] = mapped_column(Integer, nullable=True)
     results_per_page: Mapped[int | None] = mapped_column(Integer, nullable=True)
     item_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    page: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class Video(Base):
@@ -69,6 +71,18 @@ def create_schema(engine: Engine) -> None:
     Base.metadata.create_all(engine)
 
 
+def find_latest_matching_search_run(
+    session: Session,
+    *,
+    request_hash: str,
+) -> YouTubeSearchRun | None:
+    return session.scalars(
+        select(YouTubeSearchRun)
+        .where(YouTubeSearchRun.request_hash == request_hash)
+        .order_by(YouTubeSearchRun.executed_at.desc(), YouTubeSearchRun.id.desc())
+    ).first()
+
+
 def save_search_response(
     session: Session,
     *,
@@ -77,11 +91,14 @@ def save_search_response(
     published_after: str | None,
     published_before: str | None,
     fixed_params: dict[str, Any],
+    request_hash: str,
+    page: int,
     response: dict[str, Any],
 ) -> YouTubeSearchRun:
     items = response.get("items", [])
     page_info = response.get("pageInfo", {})
     run = YouTubeSearchRun(
+        request_hash=request_hash,
         query=query,
         preset=preset,
         published_after=published_after,
@@ -98,6 +115,7 @@ def save_search_response(
         total_results=page_info.get("totalResults"),
         results_per_page=page_info.get("resultsPerPage"),
         item_count=len(items),
+        page=page,
     )
     session.add(run)
     session.flush()
