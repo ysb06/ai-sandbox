@@ -1,18 +1,19 @@
+import json
+import os
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-import whisperx
-from whisperx.diarize import DiarizationPipeline
-from whisperx.utils import get_writer
-from enum import Enum
-import torch
-from tqdm import tqdm
-import os
-import json
-from numpy.typing import ArrayLike
-from whisperx.asr import FasterWhisperPipeline
-from whisperx.schema import TranscriptionResult, AlignedTranscriptionResult
 import numpy as np
+import torch
+import whisperx
+from numpy.typing import ArrayLike
+from tqdm import tqdm
+from whisperx.asr import FasterWhisperPipeline
+from whisperx.diarize import DiarizationPipeline
+from whisperx.schema import AlignedTranscriptionResult, TranscriptionResult
+from whisperx.utils import get_writer
+
 
 class TranscriptionModel(Enum):
     SMALL = "small"
