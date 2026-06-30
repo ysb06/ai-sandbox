@@ -99,3 +99,54 @@ def _extract_other_info(
     if status.get("containsSyntheticMedia") is True:
         other_info.append("containsSyntheticMedia")
     return other_info
+
+
+def extract_video_detail_values(item: dict[str, Any]) -> dict[str, Any]:
+    snippet = _dict_value(item.get("snippet"))
+    content_details = _dict_value(item.get("contentDetails"))
+    status = _dict_value(item.get("status"))
+    statistics = _dict_value(item.get("statistics"))
+    recording_details = _dict_value(item.get("recordingDetails"))
+    topic_details = _dict_value(item.get("topicDetails"))
+
+    return {
+        "duration": content_details.get("duration"),
+        "resolution": content_details.get("definition"),
+        "has_caption": _parse_bool(content_details.get("caption")),
+        "tags": list(_list_value(snippet.get("tags"))),
+        "language": snippet.get("defaultLanguage"),
+        "audio_language": snippet.get("defaultAudioLanguage"),
+        "license": status.get("license"),
+        "view_count": _parse_int(statistics.get("viewCount")),
+        "like_count": _parse_int(statistics.get("likeCount")),
+        "comment_count": _parse_int(statistics.get("commentCount")),
+        "recording_date": recording_details.get("recordingDate"),
+        "location": recording_details.get("location"),
+        "rating": _extract_rating(
+            _dict_value(content_details.get("contentRating")),
+            status,
+        ),
+        "other_info": _extract_other_info(topic_details, status),
+        "raw": item,
+    }
+
+
+def create_or_update_video_detail(
+    session: Session,
+    *,
+    video_ref_id: int,
+    item: dict[str, Any],
+) -> VideoDetail:
+    values = extract_video_detail_values(item)
+    detail = session.scalars(
+        select(VideoDetail).where(VideoDetail.video_ref_id == video_ref_id)
+    ).first()
+    if detail is None:
+        detail = VideoDetail(video_ref_id=video_ref_id, **values)
+        session.add(detail)
+    else:
+        for key, value in values.items():
+            setattr(detail, key, value)
+
+    session.flush()
+    return detail

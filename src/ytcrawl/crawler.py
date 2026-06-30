@@ -6,9 +6,32 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from ytcrawl.db import core, videos, youtube_search_runs
+from ytcrawl.db import core, videos, videos_detail, youtube_search_runs
 from ytcrawl.downloader.youtube import download as download_youtube
 from ytcrawl.search import youtube as youtube_search
+from ytcrawl.search import youtube_detail
+
+
+def _group_video_record_ids_by_video_id(
+    video_records: tuple[videos.VideoRecord, ...],
+) -> dict[str, list[int]]:
+    grouped: dict[str, list[int]] = {}
+    for record in video_records:
+        if record.video_id:
+            grouped.setdefault(record.video_id, []).append(record.id)
+    return grouped
+
+
+def _map_video_detail_items_by_video_id(
+    responses: list[dict],
+) -> dict[str, dict]:
+    detail_items: dict[str, dict] = {}
+    for response in responses:
+        for item in response.get("items", []):
+            video_id = item.get("id")
+            if video_id:
+                detail_items[video_id] = item
+    return detail_items
 
 
 def run_crawl_youtube(
@@ -71,7 +94,53 @@ def run_crawl_youtube(
         item_count = run.item_count
         session.commit()
 
-    # Todo: YouTube 비디오 별 상세 정보를 가져와서 데이터베이스에 저장합니다. 
+    # YouTube 비디오 별 상세 정보를 가져와서 데이터베이스에 저장합니다.
+    detail_successes = 0
+    detail_failures = 0
+    record_ids_by_video_id = _group_video_record_ids_by_video_id(video_records)
+    if record_ids_by_video_id:
+        try:
+            detail_responses = youtube_detail.fetch_video_detail_responses(
+                list(record_ids_by_video_id),
+                api_key,
+            )
+        except Exception as exc:  # noqa: BLE001 - keep downloading remaining videos.
+            detail_failures += sum(
+                len(record_ids) for record_ids in record_ids_by_video_id.values()
+            )
+            print(f"Failed to fetch video details: {exc}", file=sys.stderr)
+        else:
+            detail_items_by_video_id = _map_video_detail_items_by_video_id(
+                detail_responses
+            )
+            for video_id, record_ids in record_ids_by_video_id.items():
+                detail_item = detail_items_by_video_id.get(video_id)
+                if detail_item is None:
+                    detail_failures += len(record_ids)
+                    print(
+                        f"Missing video detail for video_id {video_id}.",
+                        file=sys.stderr,
+                    )
+                    continue
+
+                for video_pk in record_ids:
+                    with Session(engine) as session:
+                        try:
+                            videos_detail.create_or_update_video_detail(
+                                session,
+                                video_ref_id=video_pk,
+                                item=detail_item,
+                            )
+                            session.commit()
+                            detail_successes += 1
+                        except Exception as exc:  # noqa: BLE001 - keep processing rows.
+                            session.rollback()
+                            detail_failures += 1
+                            print(
+                                f"Failed to save video detail for video row "
+                                f"{video_pk}: {exc}",
+                                file=sys.stderr,
+                            )
 
     # YouTube 비디오를 다운로드하고 데이터베이스에 경로를 업데이트합니다.
     failures = 0
@@ -102,6 +171,7 @@ def run_crawl_youtube(
 
     print(
         f"Saved {item_count} videos from search run {run_id}; "
+        f"details saved {detail_successes}, detail failed {detail_failures}; "
         f"downloaded {successes}, failed {failures}."
     )
-    return 1 if failures else 0
+    return 1 if failures or detail_failures else 0
