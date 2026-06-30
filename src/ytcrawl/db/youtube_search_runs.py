@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, select
-from sqlalchemy import create_engine as sqlalchemy_create_engine
-from sqlalchemy.engine import Engine, make_url
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy import DateTime, Integer, String, select
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
-
-class Base(DeclarativeBase):
-    pass
+from ytcrawl.db.core import Base
 
 
 class YouTubeSearchRun(Base):
@@ -43,35 +38,6 @@ class YouTubeSearchRun(Base):
     page: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
-class Video(Base):
-    __tablename__ = "videos"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    search_id: Mapped[int] = mapped_column(
-        ForeignKey("youtube_search_runs.id"),
-        nullable=False,
-        index=True,
-    )
-    kind: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    etag: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    video_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    title: Mapped[str | None] = mapped_column(Text, nullable=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    publishTime: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    path: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-
-def create_engine_for_url(db_url: str) -> Engine:
-    url = make_url(db_url)
-    if url.drivername == "sqlite" and url.database not in (None, "", ":memory:"):
-        Path(url.database).expanduser().parent.mkdir(parents=True, exist_ok=True)
-    return sqlalchemy_create_engine(db_url)
-
-
-def create_schema(engine: Engine) -> None:
-    Base.metadata.create_all(engine)
-
-
 def find_latest_matching_search_run(
     session: Session,
     *,
@@ -84,7 +50,7 @@ def find_latest_matching_search_run(
     ).first()
 
 
-def save_search_response(
+def create_search_run(
     session: Session,
     *,
     query: str,
@@ -120,20 +86,5 @@ def save_search_response(
     )
     session.add(run)
     session.flush()
-
-    for item in items:
-        snippet = item.get("snippet", {})
-        item_id = item.get("id", {})
-        session.add(
-            Video(
-                search_id=run.id,
-                kind=item.get("kind"),
-                etag=item.get("etag"),
-                video_id=item_id.get("videoId"),
-                title=snippet.get("title"),
-                description=snippet.get("description"),
-                publishTime=snippet.get("publishTime") or item.get("publishTime"),
-            )
-        )
-
+    
     return run
