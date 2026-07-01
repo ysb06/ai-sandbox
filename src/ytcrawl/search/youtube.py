@@ -24,12 +24,6 @@ PRESET_QUERIES: dict[str, str] = {
 }
 
 
-def resolve_preset(args: argparse.Namespace) -> str | None:
-    if args.query:
-        return None
-    return args.preset
-
-
 def resolve_query(args: argparse.Namespace) -> str:
     if args.query:
         return args.query
@@ -51,14 +45,12 @@ def build_search_params(args: argparse.Namespace, page_token: str | None = None)
 def build_request_hash(
     *,
     query: str,
-    preset: str | None,
     published_after: str | None,
     published_before: str | None,
     fixed_params: dict[str, Any],
 ) -> str:
     payload = {
         "query": query,
-        "preset": preset,
         "published_after": published_after,
         "published_before": published_before,
         "fixed_params": {
@@ -90,7 +82,7 @@ def fetch_search_response(
 ) -> dict[str, Any]:
     youtube = create_youtube_client(api_key)
     params = build_search_params(args, page_token=page_token)
-    
+
     return youtube.search().list(**params).execute(num_retries=0)
 
 

@@ -20,7 +20,6 @@ class YouTubeSearchRun(Base):
     )
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     query: Mapped[str] = mapped_column(String(512), nullable=False)
-    preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
     published_after: Mapped[str | None] = mapped_column(String(32), nullable=True)
     published_before: Mapped[str | None] = mapped_column(String(32), nullable=True)
     part: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -54,7 +53,6 @@ def create_search_run(
     session: Session,
     *,
     query: str,
-    preset: str | None,
     published_after: str | None,
     published_before: str | None,
     fixed_params: dict[str, Any],
@@ -67,7 +65,6 @@ def create_search_run(
     run = YouTubeSearchRun(
         request_hash=request_hash,
         query=query,
-        preset=preset,
         published_after=published_after,
         published_before=published_before,
         part=fixed_params["part"],

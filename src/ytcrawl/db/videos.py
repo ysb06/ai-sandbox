@@ -78,3 +78,41 @@ def update_video_path(
     video = session.get(Video, id)
     if video is not None:
         video.path = path
+
+
+def _to_video_records(video_rows: tuple[Video, ...]) -> tuple[VideoRecord, ...]:
+    return tuple(VideoRecord(id=video.id, video_id=video.video_id) for video in video_rows)
+
+
+def find_video_records_for_search(
+    session: Session,
+    *,
+    search_id: int,
+) -> tuple[VideoRecord, ...]:
+    return _to_video_records(find_videos_for_search(session, search_id=search_id))
+
+
+def find_video_records_by_video_ids(
+    session: Session,
+    *,
+    video_ids: list[str],
+) -> tuple[VideoRecord, ...]:
+    if not video_ids:
+        return ()
+    video_rows = tuple(
+        session.scalars(
+            select(Video)
+            .where(Video.video_id.in_(video_ids))
+            .order_by(Video.id)
+        )
+    )
+    return _to_video_records(video_rows)
+
+
+def find_video_records_without_path(
+    session: Session,
+) -> tuple[VideoRecord, ...]:
+    video_rows = tuple(
+        session.scalars(select(Video).where(Video.path.is_(None)).order_by(Video.id))
+    )
+    return _to_video_records(video_rows)

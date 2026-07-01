@@ -21,12 +21,16 @@ def _is_final_download_candidate(path: Path) -> bool:
     return not any(path.name.endswith(suffix) for suffix in TEMPORARY_SUFFIXES)
 
 
-def _resolve_downloaded_file(output_dir: Path, video_id: str) -> Path:
-    candidates = [
+def _find_final_download_candidates(output_dir: Path, video_id: str) -> list[Path]:
+    return sorted(
         path
         for path in output_dir.glob(f"vid_{video_id}.*")
         if _is_final_download_candidate(path)
-    ]
+    )
+
+
+def _resolve_downloaded_file(output_dir: Path, video_id: str) -> Path:
+    candidates = _find_final_download_candidates(output_dir, video_id)
     if not candidates:
         raise YouTubeDownloadError(
             f"Downloaded file not found for video_id {video_id}."
@@ -41,12 +45,19 @@ def _resolve_downloaded_file(output_dir: Path, video_id: str) -> Path:
 def download(
     video_id: str,
     output_dir: str | Path,
+    overwrite: bool = False,
 ) -> Path:
     if not VIDEO_ID_PATTERN.fullmatch(video_id):
         raise ValueError(f"Invalid YouTube video_id: {video_id!r}")
 
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
+    existing_candidates = _find_final_download_candidates(destination, video_id)
+    if existing_candidates and not overwrite:
+        return _resolve_downloaded_file(destination, video_id)
+    if overwrite:
+        for candidate in existing_candidates:
+            candidate.unlink()
 
     options: dict[str, Any] = {
         "format": DOWNLOAD_FORMAT,
