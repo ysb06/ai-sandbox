@@ -21,6 +21,7 @@ def create_engine_for_url(db_url: str) -> Engine:
 def create_all(engine: Engine) -> None:
     from ytcrawl.db import (  # noqa: F401
         video_download_attempts,
+        video_reviews,
         videos,
         videos_detail,
         youtube_search_runs,

@@ -1,6 +1,7 @@
 from ytcrawl.db import (
     core,
     video_download_attempts,
+    video_reviews,
     videos,
     videos_detail,
     youtube_search_runs,
@@ -9,6 +10,7 @@ from ytcrawl.db import (
 __all__ = [
     "core",
     "video_download_attempts",
+    "video_reviews",
     "videos",
     "videos_detail",
     "youtube_search_runs",
