@@ -150,3 +150,13 @@ def create_or_update_video_detail(
 
     session.flush()
     return detail
+
+
+def find_video_detail_for_video(
+    session: Session,
+    *,
+    video_ref_id: int,
+) -> VideoDetail | None:
+    return session.scalars(
+        select(VideoDetail).where(VideoDetail.video_ref_id == video_ref_id)
+    ).first()

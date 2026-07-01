@@ -69,6 +69,30 @@ def find_videos_for_search(
     )
 
 
+def find_videos_from_id(
+    session: Session,
+    *,
+    start_id: int,
+    rows: int,
+) -> tuple[Video, ...]:
+    return tuple(
+        session.scalars(
+            select(Video)
+            .where(Video.id >= start_id)
+            .order_by(Video.id)
+            .limit(rows)
+        )
+    )
+
+
+def find_video_by_id(
+    session: Session,
+    *,
+    video_ref_id: int,
+) -> Video | None:
+    return session.get(Video, video_ref_id)
+
+
 def update_video_path(
     session: Session,
     *,

@@ -103,3 +103,15 @@ def find_attempts_for_video(
             .order_by(VideoDownloadAttempt.id)
         )
     )
+
+
+def find_latest_attempt_for_video(
+    session: Session,
+    *,
+    video_ref_id: int,
+) -> VideoDownloadAttempt | None:
+    return session.scalars(
+        select(VideoDownloadAttempt)
+        .where(VideoDownloadAttempt.video_ref_id == video_ref_id)
+        .order_by(VideoDownloadAttempt.id.desc())
+    ).first()

@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy import UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import UniqueConstraint, select
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from ytcrawl.db.core import Base
 
@@ -62,3 +62,46 @@ class VideoReview(Base):
         onupdate=_now_utc,
         nullable=False,
     )
+
+
+def find_video_review(
+    session: Session,
+    *,
+    video_ref_id: int,
+    username: str,
+) -> VideoReview | None:
+    return session.scalars(
+        select(VideoReview).where(
+            VideoReview.video_ref_id == video_ref_id,
+            VideoReview.username == username,
+        )
+    ).first()
+
+
+def upsert_video_review(
+    session: Session,
+    *,
+    video_ref_id: int,
+    username: str,
+    status: str,
+    note: str | None,
+) -> VideoReview:
+    review = find_video_review(
+        session,
+        video_ref_id=video_ref_id,
+        username=username,
+    )
+    if review is None:
+        review = VideoReview(
+            video_ref_id=video_ref_id,
+            username=username,
+            status=status,
+            note=note,
+        )
+        session.add(review)
+    else:
+        review.status = status
+        review.note = note
+
+    session.flush()
+    return review
