@@ -1,3 +1,3 @@
-# Portal of AI Services
+# AI Data Sandbox
 
-개인적으로 개발한 AI 서비스들을 모아놓은 포털입니다.
+AI 데이터 관련 코드 샌드박스
