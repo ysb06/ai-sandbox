@@ -1,17 +1,35 @@
 from __future__ import annotations
 
 import argparse
+import random
+import re
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from ytcrawl.db import core, videos, videos_detail, youtube_search_runs
-from ytcrawl.downloader.youtube import download as download_youtube
+from ytcrawl.db import (
+    core,
+    video_download_attempts,
+    videos,
+    videos_detail,
+    youtube_search_runs,
+)
+from ytcrawl.downloader.youtube import (
+    DOWNLOADER_LABEL,
+    DOWNLOAD_FORMAT,
+    YouTubeDownloadError,
+    download as download_youtube,
+)
 from ytcrawl.search import youtube as youtube_search
 from ytcrawl.search import youtube_detail
+
+DOWNLOAD_SLEEP_SECONDS_RANGE = (10.0, 15.0)
+ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
+BOT_CHECK_ERROR_TYPE = "bot_check_required"
 
 
 @dataclass(frozen=True)
@@ -43,6 +61,64 @@ def _map_video_detail_items_by_video_id(
             if video_id:
                 detail_items[video_id] = item
     return detail_items
+
+
+def _clean_download_error_message(exc: Exception) -> str:
+    return ANSI_ESCAPE_PATTERN.sub("", str(exc))
+
+
+def _classify_download_error(exc: Exception) -> str:
+    message = _clean_download_error_message(exc).lower()
+    if (
+        "sign in to confirm" in message
+        and "not a bot" in message
+    ) or "--cookies-from-browser" in message or "--cookies" in message:
+        return BOT_CHECK_ERROR_TYPE
+    if "http error 403" in message or "403: forbidden" in message:
+        return "http_403_forbidden"
+    if ("bytes read" in message and "more expected" in message) or (
+        "content too short" in message
+    ):
+        return "incomplete_read"
+    if isinstance(exc, YouTubeDownloadError):
+        return "download_error"
+    return "unexpected_error"
+
+
+def _sleep_before_next_download() -> None:
+    time.sleep(random.uniform(*DOWNLOAD_SLEEP_SECONDS_RANGE))
+
+
+def _create_download_attempts(
+    session: Session,
+    record_ids: list[int],
+) -> list[int]:
+    attempt_ids: list[int] = []
+    for video_pk in record_ids:
+        attempt = video_download_attempts.create_download_attempt(
+            session,
+            video_ref_id=video_pk,
+            downloader=DOWNLOADER_LABEL,
+            format_selector=DOWNLOAD_FORMAT,
+        )
+        attempt_ids.append(attempt.id)
+    return attempt_ids
+
+
+def _mark_download_attempts_failed(
+    session: Session,
+    attempt_ids: list[int],
+    *,
+    error_type: str,
+    error_message: str,
+) -> None:
+    for attempt_id in attempt_ids:
+        video_download_attempts.mark_download_attempt_failed(
+            session,
+            id=attempt_id,
+            error_type=error_type,
+            error_message=error_message,
+        )
 
 
 def crawl_youtube_snippet(
@@ -119,18 +195,8 @@ def crawl_youtube_snippet(
 def crawl_youtube_details(
     engine: Engine,
     api_key: str,
-    video_records: tuple[videos.VideoRecord, ...] | None = None,
-    search_run_id: int | None = None,
+    video_records: tuple[videos.VideoRecord, ...],
 ):
-    if video_records is None:
-        if search_run_id is None:
-            raise ValueError("video_records or search_run_id is required.")
-        with Session(engine) as session:
-            video_records = videos.find_video_records_for_search(
-                session,
-                search_id=search_run_id,
-            )
-
     # YouTube 비디오 별 상세 정보를 가져와서 데이터베이스에 저장합니다.
     detail_successes = 0
     detail_failures = 0
@@ -185,19 +251,8 @@ def crawl_youtube_details(
 def crawl_youtube_videos(
     engine: Engine,
     output_dir: str,
-    video_records: tuple[videos.VideoRecord, ...] | None = None,
-    video_ids: list[str] | None = None,
+    video_records: tuple[videos.VideoRecord, ...],
 ):
-    if video_records is None:
-        with Session(engine) as session:
-            if video_ids is None:
-                video_records = videos.find_video_records_without_path(session)
-            else:
-                video_records = videos.find_video_records_by_video_ids(
-                    session,
-                    video_ids=video_ids,
-                )
-
     record_ids_by_video_id = _group_video_record_ids_by_video_id(video_records)
     missing_video_id_count = len(video_records) - sum(
         len(record_ids) for record_ids in record_ids_by_video_id.values()
@@ -212,17 +267,65 @@ def crawl_youtube_videos(
     # YouTube 비디오를 다운로드하고 데이터베이스에 경로를 업데이트합니다.
     failures = missing_video_id_count
     successes = 0
-    for video_id, record_ids in record_ids_by_video_id.items():
+    video_items = list(record_ids_by_video_id.items())
+    for item_index, (video_id, record_ids) in enumerate(video_items):
+        if item_index > 0:
+            _sleep_before_next_download()
+
+        attempt_ids: list[int] = []
+        with Session(engine) as session:
+            attempt_ids = _create_download_attempts(session, record_ids)
+            session.commit()
+
         try:
             downloaded_path = Path(
                 download_youtube(video_id, output_dir, overwrite=False)
             ).resolve()
         except Exception as exc:  # noqa: BLE001 - keep crawling remaining videos.
+            error_type = _classify_download_error(exc)
+            error_message = _clean_download_error_message(exc)
+            with Session(engine) as session:
+                _mark_download_attempts_failed(
+                    session,
+                    attempt_ids,
+                    error_type=error_type,
+                    error_message=error_message,
+                )
+                session.commit()
             failures += len(record_ids)
             print(f"Failed to download {video_id}: {exc}", file=sys.stderr)
+            if error_type == BOT_CHECK_ERROR_TYPE:
+                remaining_items = video_items[item_index + 1 :]
+                skipped_message = (
+                    f"Skipped after bot check on {video_id}: {error_message}"
+                )
+                with Session(engine) as session:
+                    for _, skipped_record_ids in remaining_items:
+                        skipped_attempt_ids = _create_download_attempts(
+                            session,
+                            skipped_record_ids,
+                        )
+                        _mark_download_attempts_failed(
+                            session,
+                            skipped_attempt_ids,
+                            error_type=BOT_CHECK_ERROR_TYPE,
+                            error_message=skipped_message,
+                        )
+                        failures += len(skipped_record_ids)
+                    session.commit()
+                break
             continue
 
+        file_size_bytes = (
+            downloaded_path.stat().st_size if downloaded_path.is_file() else None
+        )
         with Session(engine) as session:
+            for attempt_id in attempt_ids:
+                video_download_attempts.mark_download_attempt_succeeded(
+                    session,
+                    id=attempt_id,
+                    file_size_bytes=file_size_bytes,
+                )
             for video_pk in record_ids:
                 videos.update_video_path(
                     session, id=video_pk, path=str(downloaded_path)

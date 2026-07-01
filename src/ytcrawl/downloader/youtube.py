@@ -4,10 +4,12 @@ import re
 from pathlib import Path
 from typing import Any
 from yt_dlp import YoutubeDL
+from yt_dlp.version import __version__ as YT_DLP_VERSION
 
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 YOUTUBE_WATCH_URL = "https://www.youtube.com/watch?v={video_id}"
 DOWNLOAD_FORMAT = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best[ext=mp4]/best"
+DOWNLOADER_LABEL = f"yt-dlp={YT_DLP_VERSION}"
 TEMPORARY_SUFFIXES = (".part", ".ytdl", ".tmp", ".temp")
 
 

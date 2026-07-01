@@ -1,13 +1,11 @@
 import argparse
 import os
 import sys
-from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from collections.abc import Mapping, Sequence
 
 from dotenv import load_dotenv
 
 from ytcrawl.crawler import run_crawl_youtube
-from ytcrawl.downloader.youtube import download as download_youtube
 from ytcrawl.search.youtube import PRESET_QUERIES
 
 DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
@@ -31,6 +29,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         required=True,
         help="Directory for downloaded videos",
     )
+    parser.add_argument(
+        "--db-url",
+        help=f"Database URL (default: {DEFAULT_DB_URL})",
+    )
     return parser.parse_args(argv)
 
 
@@ -50,7 +52,7 @@ def main(
         print("YOUTUBE_API_KEY is required.", file=sys.stderr)
         return 2
 
-    return run_crawl_youtube(args, api_key, db_url)
+    return run_crawl_youtube(args, api_key, args.db_url or db_url)
 
 
 if __name__ == "__main__":

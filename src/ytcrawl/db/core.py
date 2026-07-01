@@ -19,6 +19,11 @@ def create_engine_for_url(db_url: str) -> Engine:
 
 
 def create_all(engine: Engine) -> None:
-    from ytcrawl.db import videos, videos_detail, youtube_search_runs  # noqa: F401
+    from ytcrawl.db import (  # noqa: F401
+        video_download_attempts,
+        videos,
+        videos_detail,
+        youtube_search_runs,
+    )
 
     Base.metadata.create_all(engine)
