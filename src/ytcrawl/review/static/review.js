@@ -1,12 +1,14 @@
+const REVIEWED_STATUSES = ["accepted", "rejected", "needs_review"];
+
 const state = {
   videos: [],
   nextStartId: 1,
   hasMore: true,
   currentVideoId: null,
   currentDetail: null,
-  username: "",
+  lockedUsername: "",
   reviewStatus: "pending",
-  reviewTimer: null,
+  includeReviewed: false,
 };
 
 const els = {};
@@ -14,18 +16,23 @@ const els = {};
 document.addEventListener("DOMContentLoaded", () => {
   bindElements();
   bindEvents();
-  setStatusButtonsEnabled(false);
+  updateLoginControls();
+  updateReviewControls();
   loadVideos();
 });
 
 function bindElements() {
+  els.loginForm = document.getElementById("login-form");
+  els.loginUsernameInput = document.getElementById("login-username-input");
+  els.loginPasswordInput = document.getElementById("login-password-input");
+  els.loginButton = document.getElementById("login-button");
+  els.includeReviewedInput = document.getElementById("include-reviewed-input");
   els.videoList = document.getElementById("video-list");
   els.loadMore = document.getElementById("load-more-button");
   els.videoPlayer = document.getElementById("video-player");
   els.playerMessage = document.getElementById("player-message");
   els.overviewPanel = document.getElementById("overview-panel");
   els.detailPanel = document.getElementById("detail-panel");
-  els.usernameInput = document.getElementById("username-input");
   els.noteInput = document.getElementById("note-input");
   els.reviewMessage = document.getElementById("review-message");
   els.statusButtons = Array.from(document.querySelectorAll(".status-button"));
@@ -33,17 +40,24 @@ function bindElements() {
 }
 
 function bindEvents() {
-  els.loadMore.addEventListener("click", () => loadVideos());
-
-  els.usernameInput.addEventListener("input", () => {
-    state.username = els.usernameInput.value;
-    setReviewMessage("");
-    updateReviewControls();
-    window.clearTimeout(state.reviewTimer);
-    state.reviewTimer = window.setTimeout(() => {
-      loadCurrentReview();
-    }, 350);
+  els.loginForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (state.lockedUsername) {
+      unlockReviewer();
+    } else {
+      lockReviewer();
+    }
   });
+
+  els.includeReviewedInput.addEventListener("change", async () => {
+    state.includeReviewed = els.includeReviewedInput.checked;
+    renderVideoList();
+    if (currentVideoIsHidden()) {
+      await selectNextVisibleVideo();
+    }
+  });
+
+  els.loadMore.addEventListener("click", () => loadVideos());
 
   els.statusButtons.forEach((button) => {
     button.addEventListener("click", () => saveReview(button.dataset.status));
@@ -54,6 +68,38 @@ function bindEvents() {
   });
 }
 
+async function lockReviewer() {
+  const username = els.loginUsernameInput.value.trim();
+  if (!username) {
+    setReviewMessage("username을 입력해 주세요.", true);
+    return;
+  }
+  state.lockedUsername = username;
+  els.loginPasswordInput.value = "";
+  state.includeReviewed = false;
+  els.includeReviewedInput.checked = false;
+  updateLoginControls();
+  await reloadQueue();
+  setReviewMessage(`${username} 사용자로 검토합니다.`);
+}
+
+async function unlockReviewer() {
+  state.lockedUsername = "";
+  state.includeReviewed = false;
+  els.includeReviewedInput.checked = false;
+  updateLoginControls();
+  await reloadQueue();
+  setReviewMessage("사용자 고정을 해제했습니다.");
+}
+
+async function reloadQueue() {
+  state.videos = [];
+  state.nextStartId = 1;
+  state.hasMore = true;
+  clearSelection();
+  await loadVideos();
+}
+
 async function loadVideos() {
   if (!state.hasMore) {
     return;
@@ -62,14 +108,21 @@ async function loadVideos() {
   els.loadMore.disabled = true;
   els.loadMore.textContent = "불러오는 중";
   try {
-    const payload = await fetchJson(`/api/videos?start_id=${state.nextStartId}&rows=50`);
+    let url = `/api/videos?start_id=${state.nextStartId}&rows=50`;
+    if (state.lockedUsername) {
+      url += `&username=${encodeURIComponent(state.lockedUsername)}`;
+    }
+    const payload = await fetchJson(url);
     state.videos = state.videos.concat(payload.items);
     state.nextStartId = payload.next_start_id;
     state.hasMore = payload.has_more;
     renderVideoList();
 
-    if (state.currentVideoId === null && state.videos.length > 0) {
-      await selectVideo(state.videos[0].id);
+    if (state.currentVideoId === null) {
+      const firstVideo = visibleVideos()[0];
+      if (firstVideo) {
+        await selectVideo(firstVideo.id);
+      }
     }
   } catch (error) {
     setReviewMessage(error.message, true);
@@ -80,13 +133,33 @@ async function loadVideos() {
 }
 
 function renderVideoList() {
+  const visible = visibleVideos();
+  if (visible.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state video-empty-state";
+    empty.textContent = "표시할 영상이 없습니다.";
+    els.videoList.replaceChildren(empty);
+    return;
+  }
+
   els.videoList.replaceChildren(
-    ...state.videos.map((video) => {
+    ...visible.map((video) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `video-item${video.id === state.currentVideoId ? " active" : ""}`;
+      button.className = [
+        "video-item",
+        video.id === state.currentVideoId ? "active" : "",
+        video.reviewed ? "reviewed" : "",
+      ].filter(Boolean).join(" ");
       button.dataset.videoId = String(video.id);
       button.addEventListener("click", () => selectVideo(video.id));
+
+      const number = document.createElement("span");
+      number.className = "video-item-number";
+      number.textContent = `#${video.id}`;
+
+      const content = document.createElement("span");
+      content.className = "video-item-content";
 
       const title = document.createElement("span");
       title.className = "video-item-title";
@@ -95,16 +168,23 @@ function renderVideoList() {
       const meta = document.createElement("span");
       meta.className = "video-item-meta";
       meta.append(
-        createPill(`#${video.id}`),
         createPill(video.video_id || "video_id 없음"),
         createPill(formatDate(video.publishTime)),
         createPill(video.has_path ? "파일 있음" : "파일 없음", video.has_path ? "ready" : "missing"),
       );
+      if (video.review_status && video.review_status !== "pending") {
+        meta.append(createPill(video.review_status, video.review_status));
+      }
 
-      button.append(title, meta);
+      content.append(title, meta);
+      button.append(number, content);
       return button;
     }),
   );
+}
+
+function visibleVideos() {
+  return state.videos.filter((video) => !(video.reviewed && !state.includeReviewed));
 }
 
 async function selectVideo(videoId) {
@@ -127,6 +207,16 @@ async function selectVideo(videoId) {
     renderInfo(null);
     setReviewMessage(error.message, true);
   }
+}
+
+function clearSelection() {
+  state.currentVideoId = null;
+  state.currentDetail = null;
+  state.reviewStatus = "pending";
+  clearPlayer("동영상을 선택해 주세요.");
+  renderInfo(null);
+  resetReviewFieldsForLoading();
+  renderVideoList();
 }
 
 function renderPlayer(detail) {
@@ -170,6 +260,7 @@ function renderInfo(detail) {
     ["resolution", meta.resolution],
     ["license", meta.license],
     ["caption", formatBoolean(meta.has_caption)],
+    ["synthetic media", formatBoolean(meta.is_synthetic_marked)],
     ["view / like / comment", [meta.view_count, meta.like_count, meta.comment_count].map(formatValue).join(" / ")],
     ["download", attemptStatus],
     ["media", media.available ? "available" : "unavailable"],
@@ -217,7 +308,7 @@ function createDefinitionList(rows) {
 }
 
 async function loadCurrentReview() {
-  const username = state.username.trim();
+  const username = state.lockedUsername;
   if (!state.currentVideoId || username === "") {
     els.noteInput.value = "";
     state.reviewStatus = "pending";
@@ -239,9 +330,9 @@ async function loadCurrentReview() {
 }
 
 async function saveReview(status) {
-  const username = state.username.trim();
+  const username = state.lockedUsername;
   if (!state.currentVideoId || username === "") {
-    setReviewMessage("username을 입력한 뒤 저장할 수 있습니다.", true);
+    setReviewMessage("login 후 저장할 수 있습니다.", true);
     updateReviewControls();
     return;
   }
@@ -260,7 +351,12 @@ async function saveReview(status) {
       },
     );
     state.reviewStatus = review.status;
-    updateReviewControls();
+    markVideoReviewed(review);
+    if (isReviewedStatus(review.status) && !state.includeReviewed) {
+      await selectNextVisibleVideo();
+    } else {
+      updateReviewControls();
+    }
     setReviewMessage("리뷰를 저장했습니다.");
   } catch (error) {
     setReviewMessage(error.message, true);
@@ -269,8 +365,52 @@ async function saveReview(status) {
   }
 }
 
+function markVideoReviewed(review) {
+  const video = state.videos.find((item) => item.id === review.video_ref_id);
+  if (!video) {
+    return;
+  }
+  video.review_status = review.status;
+  video.reviewed = isReviewedStatus(review.status);
+  renderVideoList();
+}
+
+async function selectNextVisibleVideo() {
+  const currentIndex = state.videos.findIndex((video) => video.id === state.currentVideoId);
+  const visibleAfterCurrent = state.videos.slice(currentIndex + 1).find((video) => {
+    return !(video.reviewed && !state.includeReviewed);
+  });
+  if (visibleAfterCurrent) {
+    await selectVideo(visibleAfterCurrent.id);
+    return;
+  }
+  clearSelection();
+}
+
+function currentVideoIsHidden() {
+  const current = state.videos.find((video) => video.id === state.currentVideoId);
+  return Boolean(current && current.reviewed && !state.includeReviewed);
+}
+
+function isReviewedStatus(status) {
+  return REVIEWED_STATUSES.includes(status);
+}
+
+function updateLoginControls() {
+  const locked = Boolean(state.lockedUsername);
+  els.loginUsernameInput.disabled = locked;
+  els.loginPasswordInput.disabled = locked;
+  els.loginButton.textContent = locked ? "사용자 변경" : "login";
+  els.includeReviewedInput.disabled = !locked;
+  if (!locked) {
+    state.includeReviewed = false;
+    els.includeReviewedInput.checked = false;
+  }
+}
+
 function updateReviewControls() {
-  const enabled = Boolean(state.currentVideoId && state.username.trim());
+  const enabled = Boolean(state.currentVideoId && state.lockedUsername);
+  els.noteInput.disabled = !enabled;
   setStatusButtonsEnabled(enabled);
   els.statusButtons.forEach((button) => {
     const active = enabled && button.dataset.status === state.reviewStatus;

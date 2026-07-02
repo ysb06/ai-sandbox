@@ -14,6 +14,8 @@ class VideoSummary(BaseModel):
     title: str | None
     publishTime: str | None
     has_path: bool
+    review_status: ReviewStatus | None = None
+    reviewed: bool = False
 
 
 class VideoListResponse(BaseModel):
@@ -51,6 +53,7 @@ class VideoDetailInfo(BaseModel):
     location: dict | None
     rating: list[str]
     other_info: list[str]
+    is_synthetic_marked: bool | None
 
 
 class SearchRunInfo(BaseModel):

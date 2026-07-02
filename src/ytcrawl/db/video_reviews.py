@@ -78,6 +78,23 @@ def find_video_review(
     ).first()
 
 
+def find_video_reviews_for_videos(
+    session: Session,
+    *,
+    video_ref_ids: list[int],
+    username: str,
+) -> dict[int, VideoReview]:
+    if not video_ref_ids:
+        return {}
+    reviews = session.scalars(
+        select(VideoReview).where(
+            VideoReview.username == username,
+            VideoReview.video_ref_id.in_(video_ref_ids),
+        )
+    )
+    return {review.video_ref_id: review for review in reviews}
+
+
 def upsert_video_review(
     session: Session,
     *,

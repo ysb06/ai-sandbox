@@ -28,3 +28,4 @@ def create_all(engine: Engine) -> None:
     )
 
     Base.metadata.create_all(engine)
+    videos_detail.migrate_schema(engine)

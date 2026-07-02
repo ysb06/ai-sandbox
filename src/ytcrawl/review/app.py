@@ -38,8 +38,14 @@ def create_app(
     def list_videos(
         start_id: int = Query(1, ge=1),
         rows: int = Query(50, ge=1, le=100),
+        username: str | None = Query(None),
     ) -> schemas.VideoListResponse:
-        return service.list_videos(engine=engine, start_id=start_id, rows=rows)
+        return service.list_videos(
+            engine=engine,
+            start_id=start_id,
+            rows=rows,
+            username=username,
+        )
 
     @app.get("/api/videos/{video_ref_id}", response_model=schemas.VideoDetailResponse)
     def get_video(video_ref_id: int) -> schemas.VideoDetailResponse:

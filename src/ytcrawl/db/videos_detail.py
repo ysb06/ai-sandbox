@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String
-from sqlalchemy import UniqueConstraint, select
+from sqlalchemy import (
+    Boolean,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+    inspect,
+    select,
+    text,
+)
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from ytcrawl.db.core import Base
+
+SYNTHETIC_MEDIA_MARKER = "containsSyntheticMedia"
 
 
 class VideoDetail(Base):
@@ -35,6 +48,7 @@ class VideoDetail(Base):
     location: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     rating: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     other_info: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    is_synthetic_marked: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     raw: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
 
@@ -59,6 +73,12 @@ def _parse_bool(value: Any) -> bool | None:
             return True
         if lowered == "false":
             return False
+    return None
+
+
+def _parse_synthetic_marker(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
     return None
 
 
@@ -91,14 +111,8 @@ def _extract_rating(
     return rating
 
 
-def _extract_other_info(
-    topic_details: dict[str, Any],
-    status: dict[str, Any],
-) -> list[str]:
-    other_info = list(_list_value(topic_details.get("topicCategories")))
-    if status.get("containsSyntheticMedia") is True:
-        other_info.append("containsSyntheticMedia")
-    return other_info
+def _extract_other_info(topic_details: dict[str, Any]) -> list[str]:
+    return list(_list_value(topic_details.get("topicCategories")))
 
 
 def extract_video_detail_values(item: dict[str, Any]) -> dict[str, Any]:
@@ -126,7 +140,10 @@ def extract_video_detail_values(item: dict[str, Any]) -> dict[str, Any]:
             _dict_value(content_details.get("contentRating")),
             status,
         ),
-        "other_info": _extract_other_info(topic_details, status),
+        "other_info": _extract_other_info(topic_details),
+        "is_synthetic_marked": _parse_synthetic_marker(
+            status.get(SYNTHETIC_MEDIA_MARKER)
+        ),
         "raw": item,
     }
 
@@ -160,3 +177,65 @@ def find_video_detail_for_video(
     return session.scalars(
         select(VideoDetail).where(VideoDetail.video_ref_id == video_ref_id)
     ).first()
+
+
+def migrate_schema(engine: Engine) -> None:
+    inspector = inspect(engine)
+    if "videos_detail" not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("videos_detail")}
+    with engine.begin() as connection:
+        if "is_synthetic_marked" not in columns:
+            connection.execute(
+                text("ALTER TABLE videos_detail ADD COLUMN is_synthetic_marked BOOLEAN")
+            )
+
+        rows = connection.execute(
+            text("SELECT id, raw, other_info FROM videos_detail")
+        ).mappings()
+        for row in rows:
+            connection.execute(
+                text(
+                    """
+                    UPDATE videos_detail
+                    SET is_synthetic_marked = :is_synthetic_marked,
+                        other_info = :other_info
+                    WHERE id = :id
+                    """
+                ),
+                {
+                    "id": row["id"],
+                    "is_synthetic_marked": _synthetic_marker_from_raw(row["raw"]),
+                    "other_info": json.dumps(
+                        _clean_other_info(row["other_info"]),
+                        ensure_ascii=False,
+                    ),
+                },
+            )
+
+
+def _synthetic_marker_from_raw(raw: Any) -> bool | None:
+    raw_value = _json_value(raw)
+    if not isinstance(raw_value, dict):
+        return None
+    status = raw_value.get("status")
+    if not isinstance(status, dict):
+        return None
+    return _parse_synthetic_marker(status.get(SYNTHETIC_MEDIA_MARKER))
+
+
+def _clean_other_info(value: Any) -> list[Any]:
+    other_info = _json_value(value)
+    if not isinstance(other_info, list):
+        return []
+    return [item for item in other_info if item != SYNTHETIC_MEDIA_MARKER]
+
+
+def _json_value(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return None

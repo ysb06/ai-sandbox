@@ -43,7 +43,7 @@ button:disabled {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: 68px minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
   padding: 16px;
 }
@@ -51,6 +51,9 @@ button:disabled {
 .app-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 68px;
   padding: 0 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -62,6 +65,39 @@ button:disabled {
   font-size: 24px;
   line-height: 1.2;
   letter-spacing: 0;
+}
+
+.login-form {
+  min-width: 0;
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.login-field {
+  display: grid;
+  gap: 4px;
+}
+
+.login-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.login-field input {
+  width: 160px;
+  min-height: 38px;
+}
+
+.login-button {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 800;
 }
 
 .review-workspace {
@@ -87,8 +123,28 @@ button:disabled {
 .video-nav {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
+}
+
+.video-filter-bar {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-subtle);
+}
+
+.include-reviewed-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.include-reviewed-filter input {
+  width: auto;
+  min-height: auto;
 }
 
 .video-list {
@@ -99,7 +155,8 @@ button:disabled {
 .video-item {
   width: 100%;
   display: grid;
-  gap: 7px;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 10px;
   padding: 13px 14px;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -115,6 +172,19 @@ button:disabled {
 .video-item.active {
   background: var(--accent-soft);
   box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.video-item-number {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.video-item-content {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
 }
 
 .video-item-title {
@@ -153,6 +223,29 @@ button:disabled {
   border-color: #efc4c4;
   background: #fff0f0;
   color: var(--danger);
+}
+
+.pill.accepted {
+  border-color: #bfdfcf;
+  background: #edf8f2;
+  color: var(--accent);
+}
+
+.pill.rejected {
+  border-color: #efc4c4;
+  background: #fff0f0;
+  color: var(--danger);
+}
+
+.pill.needs_review {
+  border-color: #ead19f;
+  background: #fff7df;
+  color: var(--warning);
+}
+
+.pill.pending {
+  background: var(--surface-subtle);
+  color: var(--muted);
 }
 
 .load-more-button {
@@ -275,7 +368,7 @@ button:disabled {
 
 .review-section {
   display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(320px, 1fr) auto;
+  grid-template-columns: minmax(320px, 1fr) auto;
   gap: 14px;
   align-items: end;
   padding: 14px;
@@ -375,6 +468,21 @@ button:focus-visible {
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-rows: auto auto auto;
+  }
+
+  .app-header {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 14px;
+  }
+
+  .login-form {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .login-field input {
+    width: 100%;
   }
 
   .review-workspace {

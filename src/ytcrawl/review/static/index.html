@@ -11,10 +11,27 @@
   <div class="app-shell">
     <header class="app-header">
       <h1>ytcrawl 저장 영상 검토</h1>
+      <form class="login-form" id="login-form" autocomplete="off" aria-label="검토자 고정">
+        <label class="login-field" for="login-username-input">
+          <span>username</span>
+          <input id="login-username-input" name="username" type="text" autocomplete="off" placeholder="검토자 이름">
+        </label>
+        <label class="login-field" for="login-password-input">
+          <span>password</span>
+          <input id="login-password-input" name="password" type="password" autocomplete="off" placeholder="사용 안 함">
+        </label>
+        <button class="login-button" id="login-button" type="submit">login</button>
+      </form>
     </header>
 
     <main class="review-workspace">
       <nav class="video-nav" aria-label="동영상 목록">
+        <div class="video-filter-bar">
+          <label class="include-reviewed-filter" for="include-reviewed-input">
+            <input id="include-reviewed-input" name="includeReviewed" type="checkbox" disabled>
+            <span>평가한 영상 포함</span>
+          </label>
+        </div>
         <div class="video-list" id="video-list" aria-live="polite"></div>
         <button class="load-more-button" id="load-more-button" type="button">더 보기</button>
       </nav>
@@ -35,11 +52,6 @@
     </main>
 
     <section class="review-section" aria-label="리뷰 결과 입력">
-      <label class="field username-field" for="username-input">
-        <span>username</span>
-        <input id="username-input" name="username" type="text" autocomplete="off" placeholder="검토자 이름">
-      </label>
-
       <label class="field note-field" for="note-input">
         <span>note</span>
         <textarea id="note-input" name="note" rows="3" placeholder="검토 메모"></textarea>

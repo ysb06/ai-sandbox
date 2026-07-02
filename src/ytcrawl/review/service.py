@@ -19,6 +19,7 @@ def list_videos(
     engine: Engine,
     start_id: int,
     rows: int,
+    username: str | None = None,
 ) -> schemas.VideoListResponse:
     with Session(engine) as session:
         video_rows = videos.find_videos_from_id(
@@ -26,12 +27,20 @@ def list_videos(
             start_id=start_id,
             rows=rows + 1,
         )
+        visible_rows = video_rows[:rows]
+        review_rows = _review_map_for_videos(
+            session,
+            video_rows=visible_rows,
+            username=username,
+        )
 
-    visible_rows = video_rows[:rows]
     has_more = len(video_rows) > rows
     next_start_id = video_rows[rows].id if has_more else None
     return schemas.VideoListResponse(
-        items=[_video_summary(video) for video in visible_rows],
+        items=[
+            _video_summary(video, review_rows.get(video.id))
+            for video in visible_rows
+        ],
         start_id=start_id,
         rows=rows,
         next_start_id=next_start_id,
@@ -166,13 +175,39 @@ def _media_info(video: videos.Video, media_root: Path) -> schemas.MediaInfo:
     )
 
 
-def _video_summary(video: videos.Video) -> schemas.VideoSummary:
+def _review_map_for_videos(
+    session: Session,
+    *,
+    video_rows: tuple[videos.Video, ...],
+    username: str | None,
+) -> dict[int, video_reviews.VideoReview]:
+    reviewer = username.strip() if username else ""
+    if not reviewer:
+        return {}
+    return video_reviews.find_video_reviews_for_videos(
+        session,
+        video_ref_ids=[video.id for video in video_rows],
+        username=reviewer,
+    )
+
+
+def _video_summary(
+    video: videos.Video,
+    review: video_reviews.VideoReview | None = None,
+) -> schemas.VideoSummary:
+    review_status = review.status if review is not None else None
     return schemas.VideoSummary(
         id=video.id,
         video_id=video.video_id,
         title=video.title,
         publishTime=video.publishTime,
         has_path=bool(video.path),
+        review_status=review_status,
+        reviewed=review_status in (
+            video_reviews.REVIEW_STATUS_ACCEPTED,
+            video_reviews.REVIEW_STATUS_REJECTED,
+            video_reviews.REVIEW_STATUS_NEEDS_REVIEW,
+        ),
     )
 
 
@@ -215,6 +250,7 @@ def _detail_info(detail: videos_detail.VideoDetail) -> schemas.VideoDetailInfo:
         location=detail.location,
         rating=detail.rating,
         other_info=detail.other_info,
+        is_synthetic_marked=detail.is_synthetic_marked,
     )
 
 
