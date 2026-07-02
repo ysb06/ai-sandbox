@@ -49,6 +49,14 @@ def find_latest_matching_search_run(
     ).first()
 
 
+def find_search_run_by_id(
+    session: Session,
+    *,
+    search_id: int,
+) -> YouTubeSearchRun | None:
+    return session.get(YouTubeSearchRun, search_id)
+
+
 def create_search_run(
     session: Session,
     *,

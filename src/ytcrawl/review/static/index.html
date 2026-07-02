@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ytcrawl 저장 영상 검토</title>
+  <link rel="stylesheet" href="/static/review.css">
+  <script defer src="/static/review.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1>ytcrawl 저장 영상 검토</h1>
+    </header>
+
+    <main class="review-workspace">
+      <nav class="video-nav" aria-label="동영상 목록">
+        <div class="video-list" id="video-list" aria-live="polite"></div>
+        <button class="load-more-button" id="load-more-button" type="button">더 보기</button>
+      </nav>
+
+      <section class="video-player-section" aria-label="영상 플레이어">
+        <video id="video-player" controls preload="metadata"></video>
+        <p class="player-message" id="player-message">동영상을 불러오는 중입니다.</p>
+      </section>
+
+      <aside class="info-panel" aria-label="영상 정보">
+        <div class="tabs" role="tablist" aria-label="영상 정보 탭">
+          <button id="overview-tab" class="tab-button active" type="button" role="tab" aria-selected="true" aria-controls="overview-panel">개요</button>
+          <button id="detail-tab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="detail-panel">상세</button>
+        </div>
+        <section id="overview-panel" class="tab-panel active" role="tabpanel" aria-labelledby="overview-tab"></section>
+        <section id="detail-panel" class="tab-panel" role="tabpanel" aria-labelledby="detail-tab" hidden></section>
+      </aside>
+    </main>
+
+    <section class="review-section" aria-label="리뷰 결과 입력">
+      <label class="field username-field" for="username-input">
+        <span>username</span>
+        <input id="username-input" name="username" type="text" autocomplete="off" placeholder="검토자 이름">
+      </label>
+
+      <label class="field note-field" for="note-input">
+        <span>note</span>
+        <textarea id="note-input" name="note" rows="3" placeholder="검토 메모"></textarea>
+      </label>
+
+      <fieldset class="status-field">
+        <legend>status</legend>
+        <div class="status-buttons" role="group" aria-label="검토 상태">
+          <button class="status-button" type="button" data-status="accepted" aria-pressed="false">accepted</button>
+          <button class="status-button" type="button" data-status="rejected" aria-pressed="false">rejected</button>
+          <button class="status-button" type="button" data-status="needs_review" aria-pressed="false">needs_review</button>
+        </div>
+      </fieldset>
+
+      <p class="review-message" id="review-message" role="status" aria-live="polite"></p>
+    </section>
+  </div>
+</body>
+</html>

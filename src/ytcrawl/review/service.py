@@ -10,6 +10,7 @@ from ytcrawl.db import (
     video_reviews,
     videos,
     videos_detail,
+    youtube_search_runs,
 )
 from ytcrawl.review import schemas
 
@@ -55,8 +56,15 @@ def get_video_detail(
             session,
             video_ref_id=video_ref_id,
         )
+        search_run = youtube_search_runs.find_search_run_by_id(
+            session,
+            search_id=video.search_id,
+        )
 
         video_info = _video_info(video)
+        search_run_info = (
+            _search_run_info(search_run) if search_run is not None else None
+        )
         detail_info = _detail_info(detail) if detail is not None else None
         attempt_info = (
             _download_attempt_info(latest_attempt)
@@ -67,6 +75,7 @@ def get_video_detail(
 
     return schemas.VideoDetailResponse(
         video=video_info,
+        search_run=search_run_info,
         detail=detail_info,
         latest_download_attempt=attempt_info,
         media=media_info,
@@ -167,7 +176,6 @@ def _video_summary(video: videos.Video) -> schemas.VideoSummary:
     )
 
 
-@staticmethod
 def _video_info(video: videos.Video) -> schemas.VideoInfo:
     return schemas.VideoInfo(
         id=video.id,
@@ -179,6 +187,15 @@ def _video_info(video: videos.Video) -> schemas.VideoInfo:
         description=video.description,
         publishTime=video.publishTime,
         path=video.path,
+    )
+
+
+def _search_run_info(
+    search_run: youtube_search_runs.YouTubeSearchRun,
+) -> schemas.SearchRunInfo:
+    return schemas.SearchRunInfo(
+        id=search_run.id,
+        query=search_run.query,
     )
 
 

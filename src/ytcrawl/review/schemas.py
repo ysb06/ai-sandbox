@@ -53,6 +53,11 @@ class VideoDetailInfo(BaseModel):
     other_info: list[str]
 
 
+class SearchRunInfo(BaseModel):
+    id: int
+    query: str
+
+
 class DownloadAttemptInfo(BaseModel):
     id: int
     started_at: datetime
@@ -71,6 +76,7 @@ class MediaInfo(BaseModel):
 
 class VideoDetailResponse(BaseModel):
     video: VideoInfo
+    search_run: SearchRunInfo | None
     detail: VideoDetailInfo | None
     latest_download_attempt: DownloadAttemptInfo | None
     media: MediaInfo

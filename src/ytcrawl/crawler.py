@@ -86,7 +86,9 @@ def _classify_download_error(exc: Exception) -> str:
 
 
 def _sleep_before_next_download() -> None:
-    time.sleep(random.uniform(*DOWNLOAD_SLEEP_SECONDS_RANGE))
+    sleep_time = random.uniform(*DOWNLOAD_SLEEP_SECONDS_RANGE)
+    print(f"Sleeping for {sleep_time:.2f} seconds before next download...")
+    time.sleep(sleep_time)
 
 
 def _create_download_attempts(
