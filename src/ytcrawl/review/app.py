@@ -25,8 +25,8 @@ def create_app(
     selected_media_root = Path(
         media_root or os.environ.get("YTCRAWL_MEDIA_ROOT", DEFAULT_MEDIA_ROOT)
     ).resolve()
-    engine = core.create_engine_for_url(selected_db_url)
-    core.create_all(engine)
+    core.configure(selected_db_url)
+    core.create_all()
     app = FastAPI(title="ytcrawl review")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -41,7 +41,6 @@ def create_app(
         username: str | None = Query(None),
     ) -> schemas.VideoListResponse:
         return service.list_videos(
-            engine=engine,
             start_id=start_id,
             rows=rows,
             username=username,
@@ -50,7 +49,6 @@ def create_app(
     @app.get("/api/videos/{video_ref_id}", response_model=schemas.VideoDetailResponse)
     def get_video(video_ref_id: int) -> schemas.VideoDetailResponse:
         response = service.get_video_detail(
-            engine=engine,
             media_root=selected_media_root,
             video_ref_id=video_ref_id,
         )
@@ -64,7 +62,6 @@ def create_app(
     )
     def get_review(video_ref_id: int, username: str) -> schemas.ReviewResponse:
         response = service.get_review(
-            engine=engine,
             video_ref_id=video_ref_id,
             username=username,
         )
@@ -82,7 +79,6 @@ def create_app(
         request: schemas.ReviewUpdateRequest,
     ) -> schemas.ReviewResponse:
         response = service.upsert_review(
-            engine=engine,
             video_ref_id=video_ref_id,
             username=username,
             status=request.status,
@@ -95,7 +91,6 @@ def create_app(
     @app.get("/media/videos/{video_ref_id}")
     def get_video_media(video_ref_id: int) -> FileResponse:
         path = service.resolve_media_path(
-            engine=engine,
             video_ref_id=video_ref_id,
             media_root=selected_media_root,
         )

@@ -8,9 +8,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
-
 from ytcrawl.db import (
     core,
     video_download_attempts,
@@ -92,7 +89,7 @@ def _sleep_before_next_download() -> None:
 
 
 def _create_download_attempts(
-    session: Session,
+    session,
     record_ids: list[int],
 ) -> list[int]:
     attempt_ids: list[int] = []
@@ -108,7 +105,7 @@ def _create_download_attempts(
 
 
 def _mark_download_attempts_failed(
-    session: Session,
+    session,
     attempt_ids: list[int],
     *,
     error_type: str,
@@ -124,7 +121,6 @@ def _mark_download_attempts_failed(
 
 
 def crawl_youtube_snippet(
-    engine: Engine,
     args: argparse.Namespace,
     api_key: str,
 ) -> SnippetCrawlResult:
@@ -141,7 +137,7 @@ def crawl_youtube_snippet(
     )
 
     # 데이터베이스에서 이전 검색 실행을 확인하여 다음 페이지 토큰을 가져옵니다.
-    with Session(engine) as session:
+    with core.session_scope() as session:
         latest_run = youtube_search_runs.find_latest_matching_search_run(
             session,
             request_hash=request_hash,
@@ -167,7 +163,7 @@ def crawl_youtube_snippet(
     )
 
     # YouTube 검색 실행 및 비디오 레코드를 데이터베이스에 저장합니다.
-    with Session(engine) as session:
+    with core.session_scope() as session:
         run = youtube_search_runs.create_search_run(
             session,
             query=query,
@@ -185,7 +181,6 @@ def crawl_youtube_snippet(
         )
         run_id = run.id
         item_count = run.item_count
-        session.commit()
 
     return SnippetCrawlResult(
         run_id=run_id,
@@ -195,7 +190,6 @@ def crawl_youtube_snippet(
 
 
 def crawl_youtube_details(
-    engine: Engine,
     api_key: str,
     video_records: tuple[videos.VideoRecord, ...],
 ):
@@ -229,29 +223,26 @@ def crawl_youtube_details(
                     continue
 
                 for video_pk in record_ids:
-                    with Session(engine) as session:
-                        try:
+                    try:
+                        with core.session_scope() as session:
                             videos_detail.create_or_update_video_detail(
                                 session,
                                 video_ref_id=video_pk,
                                 item=detail_item,
                             )
-                            session.commit()
-                            detail_successes += 1
-                        except Exception as exc:  # noqa: BLE001 - keep processing rows.
-                            session.rollback()
-                            detail_failures += 1
-                            print(
-                                f"Failed to save video detail for video row "
-                                f"{video_pk}: {exc}",
-                                file=sys.stderr,
-                            )
+                        detail_successes += 1
+                    except Exception as exc:  # noqa: BLE001 - keep processing rows.
+                        detail_failures += 1
+                        print(
+                            f"Failed to save video detail for video row "
+                            f"{video_pk}: {exc}",
+                            file=sys.stderr,
+                        )
 
     return (detail_successes, detail_failures)
 
 
 def crawl_youtube_videos(
-    engine: Engine,
     output_dir: str,
     video_records: tuple[videos.VideoRecord, ...],
 ):
@@ -275,9 +266,8 @@ def crawl_youtube_videos(
             _sleep_before_next_download()
 
         attempt_ids: list[int] = []
-        with Session(engine) as session:
+        with core.session_scope() as session:
             attempt_ids = _create_download_attempts(session, record_ids)
-            session.commit()
 
         try:
             downloaded_path = Path(
@@ -286,14 +276,13 @@ def crawl_youtube_videos(
         except Exception as exc:  # noqa: BLE001 - keep crawling remaining videos.
             error_type = _classify_download_error(exc)
             error_message = _clean_download_error_message(exc)
-            with Session(engine) as session:
+            with core.session_scope() as session:
                 _mark_download_attempts_failed(
                     session,
                     attempt_ids,
                     error_type=error_type,
                     error_message=error_message,
                 )
-                session.commit()
             failures += len(record_ids)
             print(f"Failed to download {video_id}: {exc}", file=sys.stderr)
             if error_type == BOT_CHECK_ERROR_TYPE:
@@ -301,7 +290,7 @@ def crawl_youtube_videos(
                 skipped_message = (
                     f"Skipped after bot check on {video_id}: {error_message}"
                 )
-                with Session(engine) as session:
+                with core.session_scope() as session:
                     for _, skipped_record_ids in remaining_items:
                         skipped_attempt_ids = _create_download_attempts(
                             session,
@@ -314,14 +303,13 @@ def crawl_youtube_videos(
                             error_message=skipped_message,
                         )
                         failures += len(skipped_record_ids)
-                    session.commit()
                 break
             continue
 
         file_size_bytes = (
             downloaded_path.stat().st_size if downloaded_path.is_file() else None
         )
-        with Session(engine) as session:
+        with core.session_scope() as session:
             for attempt_id in attempt_ids:
                 video_download_attempts.mark_download_attempt_succeeded(
                     session,
@@ -332,7 +320,6 @@ def crawl_youtube_videos(
                 videos.update_video_path(
                     session, id=video_pk, path=str(downloaded_path)
                 )
-            session.commit()
         successes += len(record_ids)
 
     return (successes, failures)
@@ -343,20 +330,18 @@ def run_crawl_youtube(
     api_key: str,
     db_url: str,
 ) -> int:
-    engine = core.create_engine_for_url(db_url)
-    core.create_all(engine)
+    core.configure(db_url)
+    core.create_all()
 
-    snippet_result = crawl_youtube_snippet(engine, args, api_key)
+    snippet_result = crawl_youtube_snippet(args, api_key)
     if snippet_result.skipped:
         return 0
 
     detail_successes, detail_failures = crawl_youtube_details(
-        engine,
         api_key,
         video_records=snippet_result.video_records,
     )
     download_successes, download_failures = crawl_youtube_videos(
-        engine,
         str(args.output_dir),
         video_records=snippet_result.video_records,
     )

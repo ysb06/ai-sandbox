@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
-
 from ytcrawl.db import (
+    core,
     video_download_attempts,
     video_reviews,
     videos,
@@ -16,12 +14,11 @@ from ytcrawl.review import schemas
 
 
 def list_videos(
-    engine: Engine,
     start_id: int,
     rows: int,
     username: str | None = None,
 ) -> schemas.VideoListResponse:
-    with Session(engine) as session:
+    with core.session_scope() as session:
         video_rows = videos.find_videos_from_id(
             session,
             start_id=start_id,
@@ -49,11 +46,10 @@ def list_videos(
 
 
 def get_video_detail(
-    engine: Engine,
     media_root: Path,
     video_ref_id: int,
 ) -> schemas.VideoDetailResponse | None:
-    with Session(engine) as session:
+    with core.session_scope() as session:
         video = videos.find_video_by_id(session, video_ref_id=video_ref_id)
         if video is None:
             return None
@@ -92,11 +88,10 @@ def get_video_detail(
 
 
 def get_review(
-    engine: Engine,
     video_ref_id: int,
     username: str,
 ) -> schemas.ReviewResponse | None:
-    with Session(engine) as session:
+    with core.session_scope() as session:
         video = videos.find_video_by_id(session, video_ref_id=video_ref_id)
         if video is None:
             return None
@@ -117,13 +112,12 @@ def get_review(
 
 
 def upsert_review(
-    engine: Engine,
     video_ref_id: int,
     username: str,
     status: schemas.ReviewStatus,
     note: str | None,
 ) -> schemas.ReviewResponse | None:
-    with Session(engine) as session:
+    with core.session_scope() as session:
         video = videos.find_video_by_id(session, video_ref_id=video_ref_id)
         if video is None:
             return None
@@ -135,16 +129,14 @@ def upsert_review(
             note=note,
         )
         response = _review_response(review, persisted=True)
-        session.commit()
         return response
 
 
 def resolve_media_path(
-    engine: Engine,
     video_ref_id: int,
     media_root: Path,
 ) -> Path | None:
-    with Session(engine) as session:
+    with core.session_scope() as session:
         video = videos.find_video_by_id(session, video_ref_id=video_ref_id)
         if video is None or not video.path:
             return None
@@ -176,7 +168,7 @@ def _media_info(video: videos.Video, media_root: Path) -> schemas.MediaInfo:
 
 
 def _review_map_for_videos(
-    session: Session,
+    session,
     *,
     video_rows: tuple[videos.Video, ...],
     username: str | None,
