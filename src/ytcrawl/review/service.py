@@ -194,6 +194,7 @@ def _video_summary(
         title=video.title,
         publishTime=video.publishTime,
         has_path=bool(video.path),
+        has_embed=bool(video.embed_code),
         review_status=review_status,
         reviewed=review_status in (
             video_reviews.REVIEW_STATUS_ACCEPTED,
@@ -214,6 +215,7 @@ def _video_info(video: videos.Video) -> schemas.VideoInfo:
         description=video.description,
         publishTime=video.publishTime,
         path=video.path,
+        embed_code=video.embed_code,
     )
 
 

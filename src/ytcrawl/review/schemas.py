@@ -14,6 +14,7 @@ class VideoSummary(BaseModel):
     title: str | None
     publishTime: str | None
     has_path: bool
+    has_embed: bool
     review_status: ReviewStatus | None = None
     reviewed: bool = False
 
@@ -36,6 +37,7 @@ class VideoInfo(BaseModel):
     description: str | None
     publishTime: str | None
     path: str | None
+    embed_code: str | None
 
 
 class VideoDetailInfo(BaseModel):

@@ -5,7 +5,7 @@ from collections.abc import Mapping, Sequence
 
 from dotenv import load_dotenv
 
-from ytcrawl.crawler import run_crawl_youtube
+from ytcrawl.crawl.youtube import crawl_youtube
 from ytcrawl.search.youtube import PRESET_QUERIES
 
 DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
@@ -14,7 +14,7 @@ DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="ytcrawl",
-        description="Search YouTube, store results, and download matching videos.",
+        description="Search YouTube, store results, details, and embed code.",
     )
     parser.add_argument("--query", help="Direct YouTube search query")
     parser.add_argument(
@@ -26,8 +26,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--published-before", dest="published_before")
     parser.add_argument(
         "--output-dir",
-        required=True,
-        help="Directory for downloaded videos",
+        help="Deprecated; downloads are not performed by the main crawl.",
     )
     parser.add_argument(
         "--db-url",
@@ -52,7 +51,7 @@ def main(
         print("YOUTUBE_API_KEY is required.", file=sys.stderr)
         return 2
 
-    return run_crawl_youtube(args, api_key, args.db_url or db_url)
+    return crawl_youtube(args, api_key, args.db_url or db_url)
 
 
 if __name__ == "__main__":

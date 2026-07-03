@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from ytcrawl.search.youtube import create_youtube_client
 
-DEFAULT_PART = "snippet,contentDetails,status,statistics,topicDetails,recordingDetails,localizations"
+DEFAULT_PART = "snippet,contentDetails,status,statistics,topicDetails,recordingDetails,localizations,player"
 MAX_VIDEO_IDS_PER_REQUEST = 50
 
 

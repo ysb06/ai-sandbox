@@ -30,6 +30,7 @@ function bindElements() {
   els.videoList = document.getElementById("video-list");
   els.loadMore = document.getElementById("load-more-button");
   els.videoPlayer = document.getElementById("video-player");
+  els.embedPlayer = document.getElementById("embed-player");
   els.playerMessage = document.getElementById("player-message");
   els.overviewPanel = document.getElementById("overview-panel");
   els.detailPanel = document.getElementById("detail-panel");
@@ -171,6 +172,7 @@ function renderVideoList() {
         createPill(video.video_id || "video_id 없음"),
         createPill(formatDate(video.publishTime)),
         createPill(video.has_path ? "파일 있음" : "파일 없음", video.has_path ? "ready" : "missing"),
+        createPill(video.has_embed ? "Embed 있음" : "Embed 없음", video.has_embed ? "ready" : "missing"),
       );
       if (video.review_status && video.review_status !== "pending") {
         meta.append(createPill(video.review_status, video.review_status));
@@ -220,21 +222,86 @@ function clearSelection() {
 }
 
 function renderPlayer(detail) {
+  resetPlayerSurfaces();
   if (detail.media && detail.media.available && detail.media.url) {
     els.videoPlayer.src = detail.media.url;
     els.videoPlayer.load();
-    els.playerMessage.classList.add("hidden");
-    els.playerMessage.textContent = "";
-  } else {
-    clearPlayer("재생 가능한 로컬 파일이 없습니다.");
+    els.videoPlayer.classList.remove("hidden");
+    hidePlayerMessage();
+    return;
   }
+
+  const embedSrc = extractEmbedSrc(detail.video && detail.video.embed_code);
+  if (embedSrc) {
+    const iframe = document.createElement("iframe");
+    iframe.src = embedSrc;
+    iframe.title = detail.video && detail.video.title ? detail.video.title : "YouTube embedded video";
+    iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+    iframe.allowFullscreen = true;
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
+    els.embedPlayer.replaceChildren(iframe);
+    els.embedPlayer.classList.remove("hidden");
+    els.embedPlayer.setAttribute("aria-hidden", "false");
+    hidePlayerMessage();
+    return;
+  }
+
+  clearPlayer("재생 가능한 로컬 파일이나 임베드 코드가 없습니다.");
 }
 
 function clearPlayer(message = "동영상을 선택해 주세요.") {
-  els.videoPlayer.removeAttribute("src");
-  els.videoPlayer.load();
+  resetPlayerSurfaces();
   els.playerMessage.textContent = message;
   els.playerMessage.classList.remove("hidden");
+}
+
+function resetPlayerSurfaces() {
+  els.videoPlayer.pause();
+  els.videoPlayer.removeAttribute("src");
+  els.videoPlayer.load();
+  els.videoPlayer.classList.add("hidden");
+  els.embedPlayer.replaceChildren();
+  els.embedPlayer.classList.add("hidden");
+  els.embedPlayer.setAttribute("aria-hidden", "true");
+}
+
+function hidePlayerMessage() {
+  els.playerMessage.classList.add("hidden");
+  els.playerMessage.textContent = "";
+}
+
+function extractEmbedSrc(embedCode) {
+  if (!embedCode) {
+    return null;
+  }
+
+  const doc = new DOMParser().parseFromString(embedCode, "text/html");
+  const iframe = doc.querySelector("iframe[src]");
+  if (!iframe) {
+    return null;
+  }
+
+  const rawSrc = iframe.getAttribute("src");
+  if (!rawSrc) {
+    return null;
+  }
+
+  try {
+    const normalizedSrc = rawSrc.startsWith("//") ? `https:${rawSrc}` : rawSrc;
+    const url = new URL(normalizedSrc, window.location.href);
+    const hostname = url.hostname.toLowerCase();
+    const allowedHost = hostname === "youtube.com"
+      || hostname.endsWith(".youtube.com")
+      || hostname === "youtube-nocookie.com"
+      || hostname.endsWith(".youtube-nocookie.com");
+    if (!allowedHost || !url.pathname.startsWith("/embed/")) {
+      return null;
+    }
+    url.protocol = "https:";
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function renderInfo(detail) {
@@ -251,6 +318,9 @@ function renderInfo(detail) {
   const attemptStatus = attempt.id
     ? (attempt.error_type ? `실패 (${attempt.error_type})` : "성공")
     : "기록 없음";
+  const mediaStatus = media.available
+    ? "local file"
+    : (extractEmbedSrc(video.embed_code) ? "embed" : "unavailable");
 
   const overviewRows = [
     ["제목", video.title],
@@ -263,7 +333,7 @@ function renderInfo(detail) {
     ["synthetic media", formatBoolean(meta.is_synthetic_marked)],
     ["view / like / comment", [meta.view_count, meta.like_count, meta.comment_count].map(formatValue).join(" / ")],
     ["download", attemptStatus],
-    ["media", media.available ? "available" : "unavailable"],
+    ["media", mediaStatus],
   ];
 
   els.overviewPanel.replaceChildren(createDefinitionList(overviewRows));

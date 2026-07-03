@@ -2,7 +2,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from ytcrawl.downloader.youtube import download
+from ytcrawl.download.youtube import download
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
