@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import json
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, String, Text, inspect, select, text
+from sqlalchemy import ForeignKey, Integer, String, Text, inspect, or_, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
@@ -123,6 +123,10 @@ def extract_embed_code(raw: Any) -> str | None:
     if not isinstance(value, dict):
         return None
 
+    status = _dict_value(value.get("status"))
+    if status.get("embeddable") is False:
+        return None
+
     player = _dict_value(value.get("player"))
     embed_code = player.get("embedHtml")
     if isinstance(embed_code, str) and embed_code:
@@ -169,10 +173,21 @@ def migrate_schema(engine: Engine) -> None:
             )
         ).mappings()
         for row in rows:
-            if row["embed_code"] is not None:
-                continue
             embed_code = extract_embed_code(row["raw"])
             if embed_code is None:
+                if row["embed_code"] is not None:
+                    connection.execute(
+                        text(
+                            """
+                            UPDATE videos
+                            SET embed_code = NULL
+                            WHERE id = :id
+                            """
+                        ),
+                        {"id": row["id"]},
+                    )
+                continue
+            if row["embed_code"] is not None:
                 continue
             connection.execute(
                 text(
@@ -235,5 +250,41 @@ def find_video_records_without_path(
 ) -> tuple[VideoRecord, ...]:
     video_rows = tuple(
         session.scalars(select(Video).where(Video.path.is_(None)).order_by(Video.id))
+    )
+    return _to_video_records(video_rows)
+
+
+def _missing_text(column):
+    return or_(column.is_(None), column == "")
+
+
+def find_video_records_needing_download(
+    session: Session,
+) -> tuple[VideoRecord, ...]:
+    video_rows = tuple(
+        session.scalars(
+            select(Video)
+            .where(_missing_text(Video.path), _missing_text(Video.embed_code))
+            .order_by(Video.id)
+        )
+    )
+    return _to_video_records(video_rows)
+
+
+def find_video_records_for_search_needing_download(
+    session: Session,
+    *,
+    search_id: int,
+) -> tuple[VideoRecord, ...]:
+    video_rows = tuple(
+        session.scalars(
+            select(Video)
+            .where(
+                Video.search_id == search_id,
+                _missing_text(Video.path),
+                _missing_text(Video.embed_code),
+            )
+            .order_by(Video.id)
+        )
     )
     return _to_video_records(video_rows)

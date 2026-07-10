@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from ytcrawl.crawl import details, search
+from ytcrawl.crawl import details, download, search
 from ytcrawl.db import core, videos
 
 
@@ -55,6 +55,21 @@ def crawl_youtube(
         video_records=snippet_result.video_records,
     )
     embed_successes, embed_failures = save_youtube_embed_codes(detail_result)
+    with core.session_scope() as session:
+        download_records = videos.find_video_records_for_search_needing_download(
+            session,
+            search_id=snippet_result.run_id,
+        )
+    if download_records and not args.output_dir:
+        raise ValueError("--output-dir is required to download videos.")
+
+    download_successes = 0
+    download_failures = 0
+    if download_records:
+        download_successes, download_failures = download.crawl_youtube_videos(
+            args.output_dir,
+            download_records,
+        )
 
     print(
         f"Saved {snippet_result.item_count} videos from search run "
@@ -63,6 +78,11 @@ def crawl_youtube(
         f"detail failed {detail_result.failures}; "
         f"embed codes saved {embed_successes}, "
         f"embed code failed {embed_failures}; "
-        "downloads skipped."
+        f"downloaded {download_successes}, "
+        f"download failed {download_failures}."
     )
-    return 1 if detail_result.failures or embed_failures else 0
+    return 1 if (
+        detail_result.failures
+        or embed_failures
+        or download_failures
+    ) else 0

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import random
 import re
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 from ytcrawl.crawl.details import group_video_record_ids_by_video_id
@@ -18,6 +20,7 @@ from ytcrawl.download.youtube import (
 DOWNLOAD_SLEEP_SECONDS_RANGE = (10.0, 15.0)
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 BOT_CHECK_ERROR_TYPE = "bot_check_required"
+DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
 
 
 def clean_download_error_message(exc: Exception) -> str:
@@ -159,3 +162,41 @@ def crawl_youtube_videos(
         successes += len(record_ids)
 
     return (successes, failures)
+
+
+def crawl_missing_youtube_videos(output_dir: str) -> tuple[int, int]:
+    with core.session_scope() as session:
+        video_records = videos.find_video_records_needing_download(session)
+    return crawl_youtube_videos(output_dir, video_records)
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="ytcrawl.crawl.download",
+        description="Download stored YouTube videos that have no embed code or local path.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        required=True,
+        help="Directory for downloaded videos",
+    )
+    parser.add_argument(
+        "--db-url",
+        default=DEFAULT_DB_URL,
+        help=f"Database URL (default: {DEFAULT_DB_URL})",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    core.configure(args.db_url)
+    core.create_all()
+
+    successes, failures = crawl_missing_youtube_videos(args.output_dir)
+    print(f"Downloaded {successes} videos, failed {failures}.")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

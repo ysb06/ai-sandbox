@@ -14,7 +14,7 @@ DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="ytcrawl",
-        description="Search YouTube, store results, details, and embed code.",
+        description="Search YouTube, store results, details, embed code, and videos.",
     )
     parser.add_argument("--query", help="Direct YouTube search query")
     parser.add_argument(
@@ -26,7 +26,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--published-before", dest="published_before")
     parser.add_argument(
         "--output-dir",
-        help="Deprecated; downloads are not performed by the main crawl.",
+        required=True,
+        help="Directory for downloaded videos without embed code or local path",
     )
     parser.add_argument(
         "--db-url",

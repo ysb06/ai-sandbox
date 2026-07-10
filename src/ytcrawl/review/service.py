@@ -136,35 +136,31 @@ def resolve_media_path(
     video_ref_id: int,
     media_root: Path,
 ) -> Path | None:
+    _ = media_root
     with core.session_scope() as session:
         video = videos.find_video_by_id(session, video_ref_id=video_ref_id)
-        if video is None or not video.path:
+        if video is None:
             return None
-        path = Path(video.path).expanduser().resolve()
-
-    if not path.is_file():
-        return None
-    try:
-        path.relative_to(media_root)
-    except ValueError:
-        return None
-    return path
+        return _resolve_video_file_path(video)
 
 
 def _media_info(video: videos.Video, media_root: Path) -> schemas.MediaInfo:
-    if not video.path:
-        return schemas.MediaInfo(available=False, url=None)
-    path = Path(video.path).expanduser().resolve()
-    try:
-        path.relative_to(media_root)
-    except ValueError:
-        return schemas.MediaInfo(available=False, url=None)
-    if not path.is_file():
+    _ = media_root
+    if _resolve_video_file_path(video) is None:
         return schemas.MediaInfo(available=False, url=None)
     return schemas.MediaInfo(
         available=True,
         url=f"/media/videos/{video.id}",
     )
+
+
+def _resolve_video_file_path(video: videos.Video) -> Path | None:
+    if not video.path:
+        return None
+    path = Path(video.path).expanduser().resolve()
+    if not path.is_file():
+        return None
+    return path
 
 
 def _review_map_for_videos(
