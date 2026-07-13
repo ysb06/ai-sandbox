@@ -21,6 +21,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--published-after", dest="published_after")
     parser.add_argument("--published-before", dest="published_before")
+    parser.add_argument(
+        "--channel-id",
+        dest="channel_id",
+        help="YouTube channel ID used to restrict search results",
+    )
+    parser.add_argument(
+        "--creative-common",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Restrict results to Creative Commons videos; "
+            "--no-creative-common allows any license"
+        ),
+    )
     parser.add_argument("--page-token", dest="page_token")
     parser.add_argument("--output", required=True, help="Path to the raw JSON output file")
     return parser.parse_args(argv)

@@ -12,8 +12,10 @@ FIXED_SEARCH_PARAMS: dict[str, Any] = {
     "maxResults": 50,
     "regionCode": "KR",
     "safeSearch": "none",
-    "videoLicense": "creativeCommon",
 }
+
+DEFAULT_VIDEO_LICENSE = "creativeCommon"
+ANY_VIDEO_LICENSE = "any"
 
 PRESET_QUERIES: dict[str, str] = {
     "facecam": "facecam face person",
@@ -30,13 +32,26 @@ def resolve_query(args: argparse.Namespace) -> str:
     return PRESET_QUERIES.get(args.preset, " ")
 
 
-def build_search_params(args: argparse.Namespace, page_token: str | None = None) -> dict[str, Any]:
+def resolve_video_license(args: argparse.Namespace) -> str:
+    if getattr(args, "creative_common", True) is False:
+        return ANY_VIDEO_LICENSE
+    return DEFAULT_VIDEO_LICENSE
+
+
+def build_search_params(
+    args: argparse.Namespace,
+    page_token: str | None = None,
+) -> dict[str, Any]:
     params = dict(FIXED_SEARCH_PARAMS)
     params["q"] = resolve_query(args)
+    params["videoLicense"] = resolve_video_license(args)
     if args.published_after:
         params["publishedAfter"] = args.published_after
     if args.published_before:
         params["publishedBefore"] = args.published_before
+    channel_id = getattr(args, "channel_id", None)
+    if channel_id:
+        params["channelId"] = channel_id
     if page_token:
         params["pageToken"] = page_token
     return params
@@ -45,12 +60,15 @@ def build_search_params(args: argparse.Namespace, page_token: str | None = None)
 def build_request_hash(
     *,
     query: str,
+    channel_id: str | None,
+    video_license: str,
     published_after: str | None,
     published_before: str | None,
     fixed_params: dict[str, Any],
 ) -> str:
     payload = {
         "query": query,
+        "channel_id": channel_id,
         "published_after": published_after,
         "published_before": published_before,
         "fixed_params": {
@@ -59,7 +77,7 @@ def build_request_hash(
             "maxResults": int(fixed_params["maxResults"]),
             "regionCode": fixed_params["regionCode"],
             "safeSearch": fixed_params["safeSearch"],
-            "videoLicense": fixed_params["videoLicense"],
+            "videoLicense": video_license,
         },
     }
     canonical = json.dumps(

@@ -24,8 +24,12 @@ def crawl_youtube_snippet(
     page_token = None
 
     query = youtube_search.resolve_query(args)
+    channel_id = getattr(args, "channel_id", None)
+    video_license = youtube_search.resolve_video_license(args)
     request_hash = youtube_search.build_request_hash(
         query=query,
+        channel_id=channel_id,
+        video_license=video_license,
         published_after=args.published_after,
         published_before=args.published_before,
         fixed_params=youtube_search.FIXED_SEARCH_PARAMS,
@@ -60,6 +64,8 @@ def crawl_youtube_snippet(
         run = youtube_search_runs.create_search_run(
             session,
             query=query,
+            channel_id=channel_id,
+            video_license=video_license,
             published_after=args.published_after,
             published_before=args.published_before,
             fixed_params=youtube_search.FIXED_SEARCH_PARAMS,

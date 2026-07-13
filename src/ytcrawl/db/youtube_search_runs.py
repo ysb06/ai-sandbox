@@ -20,6 +20,7 @@ class YouTubeSearchRun(Base):
     )
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     query: Mapped[str] = mapped_column(String(512), nullable=False)
+    channel_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     published_after: Mapped[str | None] = mapped_column(String(32), nullable=True)
     published_before: Mapped[str | None] = mapped_column(String(32), nullable=True)
     part: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -61,6 +62,8 @@ def create_search_run(
     session: Session,
     *,
     query: str,
+    channel_id: str | None,
+    video_license: str,
     published_after: str | None,
     published_before: str | None,
     fixed_params: dict[str, Any],
@@ -73,6 +76,7 @@ def create_search_run(
     run = YouTubeSearchRun(
         request_hash=request_hash,
         query=query,
+        channel_id=channel_id,
         published_after=published_after,
         published_before=published_before,
         part=fixed_params["part"],
@@ -80,7 +84,7 @@ def create_search_run(
         max_results=int(fixed_params["maxResults"]),
         region_code=fixed_params["regionCode"],
         safe_search=fixed_params["safeSearch"],
-        video_license=fixed_params["videoLicense"],
+        video_license=video_license,
         response_kind=response.get("kind"),
         response_etag=response.get("etag"),
         next_page_token=response.get("nextPageToken"),
@@ -91,5 +95,5 @@ def create_search_run(
     )
     session.add(run)
     session.flush()
-    
+
     return run
