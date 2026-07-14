@@ -58,6 +58,33 @@
         <textarea id="note-input" name="note" rows="3" placeholder="검토 메모"></textarea>
       </label>
 
+      <section class="segment-field" aria-labelledby="segment-title">
+        <div class="segment-header">
+          <span class="segment-title" id="segment-title">segments</span>
+          <span class="segment-count" id="segment-count">0개</span>
+        </div>
+
+        <div class="segment-editor">
+          <label class="segment-time-field" for="segment-start-input">
+            <span>start</span>
+            <input id="segment-start-input" name="segmentStart" type="text" inputmode="decimal" placeholder="00:00:00.000" disabled>
+          </label>
+          <button class="segment-control-button" id="segment-start-capture" type="button" disabled>현재 시각</button>
+
+          <label class="segment-time-field" for="segment-end-input">
+            <span>end</span>
+            <input id="segment-end-input" name="segmentEnd" type="text" inputmode="decimal" placeholder="00:00:00.000" disabled>
+          </label>
+          <button class="segment-control-button" id="segment-end-capture" type="button" disabled>현재 시각</button>
+
+          <button class="segment-commit-button" id="segment-commit-button" type="button" disabled>추가</button>
+          <button class="segment-control-button" id="segment-cancel-button" type="button" disabled>취소</button>
+        </div>
+
+        <div class="segment-list" id="segment-list" aria-live="polite"></div>
+        <p class="segment-message" id="segment-message" role="status" aria-live="polite"></p>
+      </section>
+
       <fieldset class="status-field">
         <legend>status</legend>
         <div class="status-buttons" role="group" aria-label="검토 상태">

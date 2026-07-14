@@ -390,9 +390,9 @@ button:disabled {
 
 .review-section {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) auto;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(520px, 1.4fr) auto;
   gap: 14px;
-  align-items: end;
+  align-items: start;
   padding: 14px;
 }
 
@@ -402,6 +402,8 @@ button:disabled {
 }
 
 .field span,
+.segment-title,
+.segment-time-field span,
 .status-field legend {
   color: var(--muted);
   font-size: 12px;
@@ -440,6 +442,166 @@ button:focus-visible {
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+.segment-field {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.segment-header {
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.segment-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.segment-editor {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(128px, 1fr) auto minmax(128px, 1fr) auto auto auto;
+  gap: 6px;
+  align-items: end;
+}
+
+.segment-time-field {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.segment-time-field input {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.segment-control-button,
+.segment-commit-button,
+.segment-row-button {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.segment-commit-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.segment-list {
+  min-height: 54px;
+  max-height: 164px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.segment-empty {
+  min-height: 52px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.segment-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.segment-row:last-child {
+  border-bottom: 0;
+}
+
+.segment-row.editing {
+  background: var(--accent-soft);
+}
+
+.segment-row-info {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 8px;
+}
+
+.segment-row-index {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.segment-row-range {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.segment-row-duration {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.segment-row-actions {
+  display: flex;
+  gap: 5px;
+  padding-right: 8px;
+}
+
+.segment-row-button {
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.segment-row-button.previewing {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.segment-row-button.delete {
+  color: var(--danger);
+}
+
+.segment-message {
+  min-height: 18px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.segment-message.error {
+  color: var(--danger);
 }
 
 .status-buttons {
@@ -487,6 +649,16 @@ button:focus-visible {
   color: var(--danger);
 }
 
+@media (max-width: 1280px) {
+  .review-section {
+    grid-template-columns: minmax(280px, 0.8fr) minmax(480px, 1.2fr);
+  }
+
+  .status-field {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-rows: auto auto auto;
@@ -531,7 +703,46 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .status-field {
+    grid-column: auto;
+  }
+
   .status-buttons {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .segment-editor {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .segment-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .segment-row-info {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 2px;
+    padding-right: 8px;
+  }
+
+  .segment-row-range {
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 13px;
+  }
+
+  .segment-row-duration {
+    grid-column: 2;
+  }
+
+  .segment-row-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 0 8px;
   }
 }
