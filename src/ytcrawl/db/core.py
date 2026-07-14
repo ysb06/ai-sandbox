@@ -44,6 +44,7 @@ def get_engine() -> Engine:
 def create_all() -> None:
     from ytcrawl.db import (  # noqa: F401
         video_download_attempts,
+        video_review_segments,
         video_reviews,
         videos,
         videos_detail,

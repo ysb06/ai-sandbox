@@ -5,6 +5,7 @@ from pathlib import Path
 from ytcrawl.db import (
     core,
     video_download_attempts,
+    video_review_segments,
     video_reviews,
     videos,
     videos_detail,
@@ -106,9 +107,14 @@ def get_review(
                 video_ref_id=video_ref_id,
                 status=video_reviews.REVIEW_STATUS_PENDING,
                 note=None,
+                segments=[],
                 persisted=False,
             )
-        return _review_response(review, persisted=True)
+        segment_rows = video_review_segments.find_segments_for_review(
+            session,
+            review_id=review.id,
+        )
+        return _review_response(review, segment_rows, persisted=True)
 
 
 def upsert_review(
@@ -116,6 +122,7 @@ def upsert_review(
     username: str,
     status: schemas.ReviewStatus,
     note: str | None,
+    segments: list[schemas.ReviewSegment] | None = None,
 ) -> schemas.ReviewResponse | None:
     with core.session_scope() as session:
         video = videos.find_video_by_id(session, video_ref_id=video_ref_id)
@@ -128,7 +135,20 @@ def upsert_review(
             status=status,
             note=note,
         )
-        response = _review_response(review, persisted=True)
+        if segments is None:
+            segment_rows = video_review_segments.find_segments_for_review(
+                session,
+                review_id=review.id,
+            )
+        else:
+            segment_rows = video_review_segments.replace_segments_for_review(
+                session,
+                review_id=review.id,
+                segments=[
+                    (segment.start_ms, segment.end_ms) for segment in segments
+                ],
+            )
+        response = _review_response(review, segment_rows, persisted=True)
         return response
 
 
@@ -261,6 +281,7 @@ def _download_attempt_info(
 
 def _review_response(
     review: video_reviews.VideoReview,
+    segments: tuple[video_review_segments.VideoReviewSegment, ...],
     *,
     persisted: bool,
 ) -> schemas.ReviewResponse:
@@ -269,5 +290,12 @@ def _review_response(
         video_ref_id=review.video_ref_id,
         status=review.status,
         note=review.note,
+        segments=[
+            schemas.ReviewSegment(
+                start_ms=segment.start_ms,
+                end_ms=segment.end_ms,
+            )
+            for segment in segments
+        ],
         persisted=persisted,
     )

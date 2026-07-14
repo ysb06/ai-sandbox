@@ -83,6 +83,7 @@ def create_app(
             username=username,
             status=request.status,
             note=request.note,
+            segments=request.segments,
         )
         if response is None:
             raise HTTPException(status_code=404, detail="Video not found.")

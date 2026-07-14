@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 ReviewStatus = Literal["pending", "accepted", "rejected", "needs_review"]
 
@@ -87,14 +87,50 @@ class VideoDetailResponse(BaseModel):
     media: MediaInfo
 
 
+class ReviewSegment(BaseModel):
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> Self:
+        if self.end_ms <= self.start_ms:
+            raise ValueError("end_ms must be greater than start_ms.")
+        return self
+
+
 class ReviewResponse(BaseModel):
     username: str
     video_ref_id: int
     status: ReviewStatus
     note: str | None
+    segments: list[ReviewSegment]
     persisted: bool
 
 
 class ReviewUpdateRequest(BaseModel):
     status: ReviewStatus
     note: str | None = None
+    segments: list[ReviewSegment] | None = None
+
+    @field_validator("segments")
+    @classmethod
+    def validate_segments(
+        cls,
+        segments: list[ReviewSegment] | None,
+    ) -> list[ReviewSegment] | None:
+        if segments is None:
+            return None
+
+        ordered = sorted(
+            segments,
+            key=lambda segment: (segment.start_ms, segment.end_ms),
+        )
+        for previous, current in zip(ordered, ordered[1:]):
+            if (
+                current.start_ms == previous.start_ms
+                and current.end_ms == previous.end_ms
+            ):
+                raise ValueError("Review segments must not contain duplicates.")
+            if current.start_ms < previous.end_ms:
+                raise ValueError("Review segments must not overlap.")
+        return ordered
