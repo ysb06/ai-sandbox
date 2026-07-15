@@ -19,16 +19,18 @@ class YouTubeSearchRun(Base):
         nullable=False,
     )
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    query: Mapped[str] = mapped_column(String(512), nullable=False)
+    collection_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    query: Mapped[str | None] = mapped_column(String(512), nullable=True)
     channel_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    playlist_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     published_after: Mapped[str | None] = mapped_column(String(32), nullable=True)
     published_before: Mapped[str | None] = mapped_column(String(32), nullable=True)
     part: Mapped[str] = mapped_column(String(32), nullable=False)
     search_type: Mapped[str] = mapped_column(String(32), nullable=False)
     max_results: Mapped[int] = mapped_column(Integer, nullable=False)
-    region_code: Mapped[str] = mapped_column(String(8), nullable=False)
-    safe_search: Mapped[str] = mapped_column(String(16), nullable=False)
-    video_license: Mapped[str] = mapped_column(String(32), nullable=False)
+    region_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    safe_search: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    video_license: Mapped[str | None] = mapped_column(String(32), nullable=True)
     response_kind: Mapped[str | None] = mapped_column(String(128), nullable=True)
     response_etag: Mapped[str | None] = mapped_column(String(256), nullable=True)
     next_page_token: Mapped[str | None] = mapped_column(String(256), nullable=True)
@@ -58,12 +60,26 @@ def find_search_run_by_id(
     return session.get(YouTubeSearchRun, search_id)
 
 
+def find_search_run_ids_by_request_hash(
+    session: Session,
+    *,
+    request_hash: str,
+) -> tuple[int, ...]:
+    return tuple(
+        session.scalars(
+            select(YouTubeSearchRun.id)
+            .where(YouTubeSearchRun.request_hash == request_hash)
+            .order_by(YouTubeSearchRun.page, YouTubeSearchRun.id)
+        )
+    )
+
+
 def create_search_run(
     session: Session,
     *,
     query: str,
-    channel_id: str | None,
-    video_license: str,
+    channel_id: str | None = None,
+    video_license: str = "creativeCommon",
     published_after: str | None,
     published_before: str | None,
     fixed_params: dict[str, Any],
@@ -71,26 +87,90 @@ def create_search_run(
     page: int,
     response: dict[str, Any],
 ) -> YouTubeSearchRun:
-    items = response.get("items", [])
+    return _create_collection_run(
+        session,
+        collection_method="search",
+        query=query,
+        channel_id=channel_id,
+        playlist_id=None,
+        video_license=video_license,
+        published_after=published_after,
+        published_before=published_before,
+        fixed_params=fixed_params,
+        request_hash=request_hash,
+        page=page,
+        response=response,
+        item_count=len(response.get("items", [])),
+    )
+
+
+def create_channel_upload_run(
+    session: Session,
+    *,
+    channel_id: str,
+    playlist_id: str,
+    published_after: str | None,
+    published_before: str | None,
+    fixed_params: dict[str, Any],
+    request_hash: str,
+    page: int,
+    response: dict[str, Any],
+    item_count: int,
+) -> YouTubeSearchRun:
+    return _create_collection_run(
+        session,
+        collection_method="channel_uploads",
+        query=None,
+        channel_id=channel_id,
+        playlist_id=playlist_id,
+        video_license=None,
+        published_after=published_after,
+        published_before=published_before,
+        fixed_params=fixed_params,
+        request_hash=request_hash,
+        page=page,
+        response=response,
+        item_count=item_count,
+    )
+
+
+def _create_collection_run(
+    session: Session,
+    *,
+    collection_method: str,
+    query: str | None,
+    channel_id: str | None,
+    playlist_id: str | None,
+    video_license: str | None,
+    published_after: str | None,
+    published_before: str | None,
+    fixed_params: dict[str, Any],
+    request_hash: str,
+    page: int,
+    response: dict[str, Any],
+    item_count: int,
+) -> YouTubeSearchRun:
     page_info = response.get("pageInfo", {})
     run = YouTubeSearchRun(
         request_hash=request_hash,
+        collection_method=collection_method,
         query=query,
         channel_id=channel_id,
+        playlist_id=playlist_id,
         published_after=published_after,
         published_before=published_before,
         part=fixed_params["part"],
         search_type=fixed_params["type"],
         max_results=int(fixed_params["maxResults"]),
-        region_code=fixed_params["regionCode"],
-        safe_search=fixed_params["safeSearch"],
+        region_code=fixed_params.get("regionCode"),
+        safe_search=fixed_params.get("safeSearch"),
         video_license=video_license,
         response_kind=response.get("kind"),
         response_etag=response.get("etag"),
         next_page_token=response.get("nextPageToken"),
         total_results=page_info.get("totalResults"),
         results_per_page=page_info.get("resultsPerPage"),
-        item_count=len(items),
+        item_count=item_count,
         page=page,
     )
     session.add(run)

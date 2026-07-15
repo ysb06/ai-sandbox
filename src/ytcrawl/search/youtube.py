@@ -14,6 +14,7 @@ FIXED_SEARCH_PARAMS: dict[str, Any] = {
     "safeSearch": "none",
 }
 
+COLLECTION_METHOD = "search"
 DEFAULT_VIDEO_LICENSE = "creativeCommon"
 ANY_VIDEO_LICENSE = "any"
 
@@ -67,6 +68,7 @@ def build_request_hash(
     fixed_params: dict[str, Any],
 ) -> str:
     payload = {
+        "collection_method": COLLECTION_METHOD,
         "query": query,
         "channel_id": channel_id,
         "published_after": published_after,

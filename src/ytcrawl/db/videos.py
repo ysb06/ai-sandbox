@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 import json
 from typing import Any
@@ -54,6 +55,38 @@ def create_videos_from_search_response(
             title=snippet.get("title"),
             description=snippet.get("description"),
             publishTime=snippet.get("publishTime") or item.get("publishTime"),
+        )
+        session.add(video)
+        video_rows.append(video)
+
+    session.flush()
+    return tuple(VideoRecord(id=video.id, video_id=video.video_id) for video in video_rows)
+
+
+def create_videos_from_playlist_items(
+    session: Session,
+    *,
+    search_id: int,
+    items: Sequence[dict[str, Any]],
+) -> tuple[VideoRecord, ...]:
+    video_rows: list[Video] = []
+    for item in items:
+        snippet = _dict_value(item.get("snippet"))
+        content_details = _dict_value(item.get("contentDetails"))
+        resource_id = _dict_value(snippet.get("resourceId"))
+        video_id = content_details.get("videoId") or resource_id.get("videoId")
+        published_at = content_details.get("videoPublishedAt")
+        if not video_id or not published_at:
+            continue
+
+        video = Video(
+            search_id=search_id,
+            kind=item.get("kind"),
+            etag=item.get("etag"),
+            video_id=video_id,
+            title=snippet.get("title"),
+            description=snippet.get("description"),
+            publishTime=published_at,
         )
         session.add(video)
         video_rows.append(video)
@@ -228,6 +261,23 @@ def find_video_records_for_search(
     return _to_video_records(find_videos_for_search(session, search_id=search_id))
 
 
+def find_video_records_for_searches(
+    session: Session,
+    *,
+    search_ids: Sequence[int],
+) -> tuple[VideoRecord, ...]:
+    if not search_ids:
+        return ()
+    video_rows = tuple(
+        session.scalars(
+            select(Video)
+            .where(Video.search_id.in_(search_ids))
+            .order_by(Video.id)
+        )
+    )
+    return _to_video_records(video_rows)
+
+
 def find_video_records_by_video_ids(
     session: Session,
     *,
@@ -281,6 +331,27 @@ def find_video_records_for_search_needing_download(
             select(Video)
             .where(
                 Video.search_id == search_id,
+                _missing_text(Video.path),
+                _missing_text(Video.embed_code),
+            )
+            .order_by(Video.id)
+        )
+    )
+    return _to_video_records(video_rows)
+
+
+def find_video_records_by_ids_needing_download(
+    session: Session,
+    *,
+    video_ref_ids: Sequence[int],
+) -> tuple[VideoRecord, ...]:
+    if not video_ref_ids:
+        return ()
+    video_rows = tuple(
+        session.scalars(
+            select(Video)
+            .where(
+                Video.id.in_(video_ref_ids),
                 _missing_text(Video.path),
                 _missing_text(Video.embed_code),
             )

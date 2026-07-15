@@ -125,3 +125,34 @@ def save_youtube_detail_items(
                 )
 
     return detail_successes, detail_failures
+
+
+def save_youtube_embed_codes(
+    detail_result: DetailCrawlResult,
+) -> tuple[int, int]:
+    embed_successes = 0
+    embed_failures = 0
+
+    for video_id, record_ids in detail_result.record_ids_by_video_id.items():
+        detail_item = detail_result.detail_items_by_video_id.get(video_id)
+        if detail_item is None:
+            continue
+
+        embed_code = videos.extract_embed_code(detail_item)
+        for video_pk in record_ids:
+            try:
+                with core.session_scope() as session:
+                    videos.update_video_embed_code(
+                        session,
+                        id=video_pk,
+                        embed_code=embed_code,
+                    )
+                embed_successes += 1
+            except Exception as exc:  # noqa: BLE001 - keep processing rows.
+                embed_failures += 1
+                print(
+                    f"Failed to save video embed code for video row {video_pk}: {exc}",
+                    file=sys.stderr,
+                )
+
+    return embed_successes, embed_failures
