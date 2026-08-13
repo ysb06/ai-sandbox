@@ -16,6 +16,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         prog="ytcrawl",
         description="Search YouTube, store results, details, embed code, and videos.",
     )
+
+    parser.add_argument(
+        "--output-dir",
+        required=True,
+        help="Directory used to store or reuse downloaded video files",
+    )
     parser.add_argument("--query", help="Direct YouTube search query")
     parser.add_argument(
         "--preset",
@@ -39,14 +45,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--output-dir",
-        required=True,
-        help="Directory for downloaded videos without embed code or local path",
-    )
-    parser.add_argument(
         "--db-url",
         help=f"Database URL (default: {DEFAULT_DB_URL})",
     )
+    parser.add_argument(
+        "--always-download",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Download every video collected in this run regardless of embed "
+            "availability. Existing local files are reused."
+        ),
+    )
+
     return parser.parse_args(argv)
 
 

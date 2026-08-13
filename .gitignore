@@ -219,3 +219,4 @@ __pycache__/
 .vscode/
 .env
 results/
+inputs/

@@ -30,10 +30,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_DB_URL,
         help=f"Database URL (default: {DEFAULT_DB_URL})",
     )
+    parser.add_argument(
+        "--always-download",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Download every video collected on this page regardless of embed "
+            "availability. Existing local files are reused."
+        ),
+    )
     return parser.parse_args(argv)
 
 
 def run_cspan_crawl(args: argparse.Namespace, api_key: str) -> int:
+    always_download = getattr(args, "always_download", False)
     return crawl_youtube_channel(
         channel_id=CSPAN_CHANNEL_ID,
         api_key=api_key,
@@ -41,6 +51,7 @@ def run_cspan_crawl(args: argparse.Namespace, api_key: str) -> int:
         output_dir=args.output_dir,
         published_after=args.published_after,
         published_before=args.published_before,
+        always_download=always_download,
     )
 
 

@@ -60,7 +60,7 @@ class VideoDetailInfo(BaseModel):
 
 class SearchRunInfo(BaseModel):
     id: int
-    query: str
+    query: str | None
 
 
 class DownloadAttemptInfo(BaseModel):

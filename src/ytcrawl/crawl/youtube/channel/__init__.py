@@ -16,6 +16,7 @@ def crawl_youtube_channel(
     output_dir: str | Path,
     published_after: str | None = None,
     published_before: str | None = None,
+    always_download: bool = False,
 ) -> int:
     lower_bound, upper_bound = youtube_uploads.parse_published_range(
         published_after,
@@ -33,6 +34,8 @@ def crawl_youtube_channel(
     page = 1
     page_token = None
     playlist_id = None
+
+
     with core.session_scope() as session:
         latest_run = youtube_search_runs.find_latest_matching_search_run(
             session,
@@ -56,71 +59,58 @@ def crawl_youtube_channel(
             channel_id=channel_id,
         )
 
-    pages_fetched = 0
     playlist_item_failures = 0
-    while True:
-        response = youtube_uploads.fetch_uploads_page(
-            youtube,
-            playlist_id=playlist_id,
-            page_token=page_token,
+    response = youtube_uploads.fetch_uploads_page(
+        youtube,
+        playlist_id=playlist_id,
+        page_token=page_token,
+    )
+    selection = youtube_uploads.select_playlist_items(
+        response,
+        published_after=lower_bound,
+        published_before=upper_bound,
+    )
+    for skipped_item in selection.skipped:
+        print(
+            "Skipping uploads playlist item "
+            f"at page {page}, index {skipped_item.index}: "
+            f"{skipped_item.reason}.",
+            file=sys.stderr,
         )
-        selection = youtube_uploads.select_playlist_items(
-            response,
-            published_after=lower_bound,
-            published_before=upper_bound,
-        )
-        for skipped_item in selection.skipped:
-            print(
-                "Skipping uploads playlist item "
-                f"at page {page}, index {skipped_item.index}: "
-                f"{skipped_item.reason}.",
-                file=sys.stderr,
-            )
-        playlist_item_failures += len(selection.skipped)
-
-        with core.session_scope() as session:
-            run = youtube_search_runs.create_channel_upload_run(
-                session,
-                channel_id=channel_id,
-                playlist_id=playlist_id,
-                published_after=published_after,
-                published_before=published_before,
-                fixed_params=youtube_uploads.FIXED_UPLOADS_PARAMS,
-                request_hash=request_hash,
-                page=page,
-                response=response,
-                item_count=len(selection.items),
-            )
-            videos.create_videos_from_playlist_items(
-                session,
-                search_id=run.id,
-                items=selection.items,
-            )
-
-        pages_fetched += 1
-        page_token = response.get("nextPageToken")
-        if not page_token:
-            break
-        page += 1
+    playlist_item_failures += len(selection.skipped)
 
     with core.session_scope() as session:
-        run_ids = youtube_search_runs.find_search_run_ids_by_request_hash(
+        run = youtube_search_runs.create_channel_upload_run(
             session,
+            channel_id=channel_id,
+            playlist_id=playlist_id,
+            published_after=published_after,
+            published_before=published_before,
+            fixed_params=youtube_uploads.FIXED_UPLOADS_PARAMS,
             request_hash=request_hash,
+            page=page,
+            response=response,
+            item_count=len(selection.items),
         )
-        video_records = videos.find_video_records_for_searches(
+        video_records = videos.create_videos_from_playlist_items(
             session,
-            search_ids=run_ids,
+            search_id=run.id,
+            items=selection.items,
         )
+        run_id = run.id
+        item_count = run.item_count
 
     detail_result = details.crawl_youtube_details(api_key, video_records)
     embed_successes, embed_failures = details.save_youtube_embed_codes(detail_result)
 
-    with core.session_scope() as session:
-        download_records = videos.find_video_records_by_ids_needing_download(
-            session,
-            video_ref_ids=[record.id for record in video_records],
-        )
+    if always_download:
+        download_records = video_records
+    else:
+        with core.session_scope() as session:
+            download_records = videos.find_video_records_by_ids_needing_download(
+                session,
+                video_ref_ids=[record.id for record in video_records],
+            )
 
     download_successes = 0
     download_failures = 0
@@ -131,8 +121,7 @@ def crawl_youtube_channel(
         )
 
     print(
-        f"Collected {len(video_records)} videos across {len(run_ids)} upload pages "
-        f"({pages_fetched} fetched now); "
+        f"Saved {item_count} videos from channel upload run {run_id}, page {page}; "
         f"playlist item failed {playlist_item_failures}; "
         f"details saved {detail_result.saved}, "
         f"detail failed {detail_result.failures}; "
