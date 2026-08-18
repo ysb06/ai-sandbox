@@ -87,6 +87,7 @@ def crawl_youtube_videos(
     output_dir: str,
     video_records: tuple[videos.VideoRecord, ...],
 ) -> tuple[int, int]:
+    output_root = Path(output_dir).expanduser().resolve()
     record_ids_by_video_id = group_video_record_ids_by_video_id(video_records)
     missing_video_id_count = len(video_records) - sum(
         len(record_ids) for record_ids in record_ids_by_video_id.values()
@@ -110,8 +111,9 @@ def crawl_youtube_videos(
 
         try:
             downloaded_path = Path(
-                download_youtube(video_id, output_dir, overwrite=False)
+                download_youtube(video_id, output_root, overwrite=False)
             ).resolve()
+            stored_path = downloaded_path.relative_to(output_root).as_posix()
         except Exception as exc:  # noqa: BLE001 - keep crawling remaining videos.
             error_type = classify_download_error(exc)
             error_message = clean_download_error_message(exc)
@@ -157,7 +159,7 @@ def crawl_youtube_videos(
                 )
             for video_pk in record_ids:
                 videos.update_video_path(
-                    session, id=video_pk, path=str(downloaded_path)
+                    session, id=video_pk, path=stored_path
                 )
         successes += len(record_ids)
 
