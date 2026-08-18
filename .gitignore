@@ -218,5 +218,6 @@ __pycache__/
 .DS_Store
 .vscode/
 .env
+/config.yaml
 results/
 inputs/

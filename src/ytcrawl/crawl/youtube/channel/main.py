@@ -9,15 +9,16 @@ from dotenv import load_dotenv
 
 from ytcrawl.crawl.youtube.channel import crawl_youtube_channel
 
-CSPAN_CHANNEL_ID = "UCb--64Gl51jIEVE-GLDAVTg"
+# CSPAN_CHANNEL_ID = "UCb--64Gl51jIEVE-GLDAVTg"
 DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="ytcrawl.crawl.youtube.channel.cspan",
-        description="Collect public uploads from the C-SPAN YouTube channel.",
+        prog="ytcrawl.crawl.youtube.channel.main",
+        description="Collect public uploads from a YouTube channel.",
     )
+    parser.add_argument("--channel-id", required=True)
     parser.add_argument("--published-after", dest="published_after")
     parser.add_argument("--published-before", dest="published_before")
     parser.add_argument(
@@ -42,10 +43,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def run_cspan_crawl(args: argparse.Namespace, api_key: str) -> int:
+def run_channel_crawl(args: argparse.Namespace, api_key: str) -> int:
     always_download = getattr(args, "always_download", False)
     return crawl_youtube_channel(
-        channel_id=CSPAN_CHANNEL_ID,
+        channel_id=args.channel_id,
         api_key=api_key,
         db_url=args.db_url,
         output_dir=args.output_dir,
@@ -70,7 +71,7 @@ def main(
         print("YOUTUBE_API_KEY is required.", file=sys.stderr)
         return 2
 
-    return run_cspan_crawl(args, api_key)
+    return run_channel_crawl(args, api_key)
 
 
 if __name__ == "__main__":
