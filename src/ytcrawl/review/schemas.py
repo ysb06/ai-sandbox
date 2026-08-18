@@ -36,7 +36,6 @@ class VideoInfo(BaseModel):
     title: str | None
     description: str | None
     publishTime: str | None
-    path: str | None
     embed_code: str | None
 
 

@@ -236,7 +236,6 @@ def _video_info(video: videos.Video) -> schemas.VideoInfo:
         title=video.title,
         description=video.description,
         publishTime=video.publishTime,
-        path=video.path,
         embed_code=video.embed_code,
     )
 

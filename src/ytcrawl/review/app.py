@@ -99,7 +99,6 @@ def create_app(
             raise HTTPException(status_code=404, detail="Video file not found.")
         return FileResponse(
             path,
-            media_type="video/mp4",
             filename=path.name,
             content_disposition_type="inline",
         )
