@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from ytcrawl.config import get_config
 from ytcrawl.db import core
 from ytcrawl.review import schemas
 import ytcrawl.review.service as service
 
-DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
-DEFAULT_MEDIA_ROOT = Path("results/ytcrawl").resolve()
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+_application: FastAPI | None = None
 
 
 def create_app(
@@ -21,10 +20,17 @@ def create_app(
     db_url: str | None = None,
     media_root: str | Path | None = None,
 ) -> FastAPI:
-    selected_db_url = db_url or os.environ.get("YTCRAWL_DB_URL", DEFAULT_DB_URL)
-    selected_media_root = Path(
-        media_root or os.environ.get("YTCRAWL_MEDIA_ROOT", DEFAULT_MEDIA_ROOT)
-    ).resolve()
+    if db_url is None or media_root is None:
+        config = get_config()
+        selected_db_url = config.remote_db_url if db_url is None else db_url
+        selected_media_root_value = (
+            config.remote_media_root if media_root is None else media_root
+        )
+    else:
+        selected_db_url = db_url
+        selected_media_root_value = media_root
+
+    selected_media_root = Path(selected_media_root_value).resolve()
     core.configure(selected_db_url)
     core.create_all()
     app = FastAPI(title="ytcrawl review")
@@ -106,4 +112,12 @@ def create_app(
     return app
 
 
-app = create_app()
+def __getattr__(name: str) -> FastAPI:
+    """Build the configured ASGI app only when the public ``app`` is used."""
+    if name != "app":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    global _application
+    if _application is None:
+        _application = create_app()
+    return _application

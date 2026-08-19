@@ -26,6 +26,7 @@ _REQUIRED_KEYS = frozenset(
         "REMOTE_BACKUP_ROOT",
         "SERVER_VENV",
         "LOCAL_STAGE_ROOT",
+        "REVIEW_HOST",
         "REVIEW_PORT",
     }
 )
@@ -48,6 +49,7 @@ class AppConfig:
     remote_backup_root: PurePosixPath
     server_venv: PurePosixPath
     local_stage_root: Path
+    review_host: str
     review_port: int
     config_path: Path = field(repr=False, compare=False)
 
@@ -174,6 +176,7 @@ def _load_config_file(path: Path) -> AppConfig:
         remote_backup_root=remote_paths["REMOTE_BACKUP_ROOT"],
         server_venv=remote_paths["SERVER_VENV"],
         local_stage_root=local_stage_root,
+        review_host=_read_string(raw_config, "REVIEW_HOST"),
         review_port=review_port,
         config_path=path,
     )
