@@ -174,66 +174,6 @@ def extract_embed_code(raw: Any) -> str | None:
     return None
 
 
-def migrate_schema(engine: Engine) -> None:
-    inspector = inspect(engine)
-    table_names = set(inspector.get_table_names())
-    if "videos" not in table_names:
-        return
-
-    columns = {column["name"] for column in inspector.get_columns("videos")}
-    with engine.begin() as connection:
-        if "embed_code" not in columns:
-            connection.execute(text("ALTER TABLE videos ADD COLUMN embed_code TEXT"))
-
-        if "videos_detail" not in table_names:
-            return
-        detail_columns = {
-            column["name"] for column in inspector.get_columns("videos_detail")
-        }
-        if not {"video_ref_id", "raw"}.issubset(detail_columns):
-            return
-
-        rows = connection.execute(
-            text(
-                """
-                SELECT videos.id AS id,
-                       videos.embed_code AS embed_code,
-                       videos_detail.raw AS raw
-                FROM videos
-                JOIN videos_detail
-                  ON videos_detail.video_ref_id = videos.id
-                """
-            )
-        ).mappings()
-        for row in rows:
-            embed_code = extract_embed_code(row["raw"])
-            if embed_code is None:
-                if row["embed_code"] is not None:
-                    connection.execute(
-                        text(
-                            """
-                            UPDATE videos
-                            SET embed_code = NULL
-                            WHERE id = :id
-                            """
-                        ),
-                        {"id": row["id"]},
-                    )
-                continue
-            if row["embed_code"] is not None:
-                continue
-            connection.execute(
-                text(
-                    """
-                    UPDATE videos
-                    SET embed_code = :embed_code
-                    WHERE id = :id
-                    """
-                ),
-                {"id": row["id"], "embed_code": embed_code},
-            )
-
-
 def _dict_value(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
