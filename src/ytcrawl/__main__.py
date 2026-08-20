@@ -5,10 +5,9 @@ from collections.abc import Mapping, Sequence
 
 from dotenv import load_dotenv
 
+from ytcrawl.config import ConfigError, get_config
 from ytcrawl.crawl.youtube import crawl_youtube
 from ytcrawl.search.youtube import PRESET_QUERIES
-
-DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -17,11 +16,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         description="Search YouTube, store results, details, embed code, and videos.",
     )
 
-    parser.add_argument(
-        "--output-dir",
-        required=True,
-        help="Directory used to store or reuse downloaded video files",
-    )
     parser.add_argument("--query", help="Direct YouTube search query")
     parser.add_argument(
         "--preset",
@@ -45,13 +39,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--db-url",
-        help=f"Database URL (default: {DEFAULT_DB_URL})",
-    )
-    parser.add_argument(
         "--always-download",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help=(
             "Download every video collected in this run regardless of embed "
             "availability. Existing local files are reused."
@@ -64,20 +54,31 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(
     argv: Sequence[str] | None = None,
     *,
-    db_url: str = DEFAULT_DB_URL,
     env: Mapping[str, str] | None = None,
 ) -> int:
+    args = parse_args(argv)
+
     if env is None:
         load_dotenv()
         env = os.environ
 
-    args = parse_args(argv)
+    try:
+        config = get_config()
+    except ConfigError as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return 2
+
     api_key = env.get("YOUTUBE_API_KEY")
     if not api_key:
         print("YOUTUBE_API_KEY is required.", file=sys.stderr)
         return 2
 
-    return crawl_youtube(args, api_key, args.db_url or db_url)
+    return crawl_youtube(
+        args,
+        api_key,
+        config.db_url,
+        output_dir=config.media_root,
+    )
 
 
 if __name__ == "__main__":

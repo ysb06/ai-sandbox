@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from ytcrawl.crawl import details, download
 from ytcrawl.crawl import search as snippet_search
@@ -11,6 +12,8 @@ def crawl_youtube(
     args: argparse.Namespace,
     api_key: str,
     db_url: str,
+    *,
+    output_dir: str | Path | None = None,
 ) -> int:
     core.configure(db_url)
     core.create_all()
@@ -35,14 +38,19 @@ def crawl_youtube(
                 search_id=snippet_result.run_id,
             )
 
-    if download_records and not args.output_dir:
-        raise ValueError("--output-dir is required to download videos.")
+    selected_output_dir = (
+        output_dir
+        if output_dir is not None
+        else getattr(args, "output_dir", None)
+    )
+    if download_records and not selected_output_dir:
+        raise ValueError("output_dir is required to download videos.")
 
     download_successes = 0
     download_failures = 0
     if download_records:
         download_successes, download_failures = download.crawl_youtube_videos(
-            args.output_dir,
+            selected_output_dir,
             download_records,
         )
 

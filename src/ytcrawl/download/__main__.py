@@ -2,6 +2,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 
+from ytcrawl.config import ConfigError, get_config
 from ytcrawl.download.youtube import download
 
 
@@ -11,7 +12,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         description="Download one YouTube video.",
     )
     parser.add_argument("--video-id", required=True, help="YouTube video ID")
-    parser.add_argument("--output-dir", required=True, help="Directory for the downloaded video")
     return parser.parse_args(argv)
 
 
@@ -20,7 +20,13 @@ def main(
 ) -> int:
     args = parse_args(argv)
     try:
-        result_path = download(args.video_id, args.output_dir)
+        config = get_config()
+    except ConfigError as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        result_path = download(args.video_id, config.media_root)
     except Exception as exc:  # noqa: BLE001 - show command-line failure clearly.
         print(f"Failed to download {args.video_id}: {exc}", file=sys.stderr)
         return 1

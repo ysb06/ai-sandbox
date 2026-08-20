@@ -8,6 +8,7 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
+from ytcrawl.config import ConfigError, get_config
 from ytcrawl.crawl.details import group_video_record_ids_by_video_id
 from ytcrawl.db import core, video_download_attempts, videos
 from ytcrawl.download.youtube import (
@@ -17,10 +18,9 @@ from ytcrawl.download.youtube import (
     download as download_youtube,
 )
 
-DOWNLOAD_SLEEP_SECONDS_RANGE = (10.0, 15.0)
+DOWNLOAD_SLEEP_SECONDS_RANGE = (10.0, 60.0)
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 BOT_CHECK_ERROR_TYPE = "bot_check_required"
-DEFAULT_DB_URL = "sqlite:///results/ytcrawl.sqlite3"
 
 
 def clean_download_error_message(exc: Exception) -> str:
@@ -84,7 +84,7 @@ def mark_download_attempts_failed(
 
 
 def crawl_youtube_videos(
-    output_dir: str,
+    output_dir: str | Path,
     video_records: tuple[videos.VideoRecord, ...],
 ) -> tuple[int, int]:
     output_root = Path(output_dir).expanduser().resolve()
@@ -166,36 +166,31 @@ def crawl_youtube_videos(
     return (successes, failures)
 
 
-def crawl_missing_youtube_videos(output_dir: str) -> tuple[int, int]:
+def crawl_missing_youtube_videos(output_dir: str | Path) -> tuple[int, int]:
     with core.session_scope() as session:
         video_records = videos.find_video_records_needing_download(session)
     return crawl_youtube_videos(output_dir, video_records)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    return argparse.ArgumentParser(
         prog="ytcrawl.crawl.download",
         description="Download stored YouTube videos that have no embed code or local path.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        required=True,
-        help="Directory for downloaded videos",
-    )
-    parser.add_argument(
-        "--db-url",
-        default=DEFAULT_DB_URL,
-        help=f"Database URL (default: {DEFAULT_DB_URL})",
-    )
-    return parser.parse_args(argv)
+    ).parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(argv)
-    core.configure(args.db_url)
+    parse_args(argv)
+    try:
+        config = get_config()
+    except ConfigError as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return 2
+
+    core.configure(config.db_url)
     core.create_all()
 
-    successes, failures = crawl_missing_youtube_videos(args.output_dir)
+    successes, failures = crawl_missing_youtube_videos(config.media_root)
     print(f"Downloaded {successes} videos, failed {failures}.")
     return 1 if failures else 0
 

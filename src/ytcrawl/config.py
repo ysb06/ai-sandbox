@@ -11,8 +11,8 @@ import yaml
 
 CONFIG_PATH_ENV = "YTCRAWL_CONFIG"
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
-LOCAL_DB_FILENAME = "ytcrawl.sqlite3"
-LOCAL_MEDIA_DIRNAME = "media"
+DB_FILENAME = "ytcrawl.sqlite3"
+MEDIA_DIRNAME = "media"
 
 _REQUIRED_KEYS = frozenset(
     {
@@ -20,12 +20,10 @@ _REQUIRED_KEYS = frozenset(
         "REMOTE_GIT_BARE",
         "REMOTE_APP_DIR",
         "REMOTE_DATA_ROOT",
-        "REMOTE_DB_PATH",
-        "REMOTE_MEDIA_ROOT",
         "REMOTE_INCOMING_ROOT",
         "REMOTE_BACKUP_ROOT",
         "SERVER_VENV",
-        "LOCAL_STAGE_ROOT",
+        "DATA_ROOT",
         "REVIEW_HOST",
         "REVIEW_PORT",
     }
@@ -43,35 +41,28 @@ class AppConfig:
     remote_git_bare: PurePosixPath
     remote_app_dir: PurePosixPath
     remote_data_root: PurePosixPath
-    remote_db_path: PurePosixPath
-    remote_media_root: PurePosixPath
     remote_incoming_root: PurePosixPath
     remote_backup_root: PurePosixPath
     server_venv: PurePosixPath
-    local_stage_root: Path
+    data_root: Path
     review_host: str
     review_port: int
     config_path: Path = field(repr=False, compare=False)
 
     @property
-    def remote_db_url(self) -> str:
-        """Return the SQLAlchemy URL for the configured remote SQLite file."""
-        return f"sqlite:///{self.remote_db_path.as_posix()}"
+    def db_path(self) -> Path:
+        """Return the fixed SQLite path below DATA_ROOT."""
+        return self.data_root / DB_FILENAME
 
     @property
-    def local_db_path(self) -> Path:
-        """Return the fixed SQLite path below LOCAL_STAGE_ROOT."""
-        return self.local_stage_root / LOCAL_DB_FILENAME
+    def db_url(self) -> str:
+        """Return the SQLAlchemy URL for the configured SQLite file."""
+        return f"sqlite:///{self.db_path.as_posix()}"
 
     @property
-    def local_db_url(self) -> str:
-        """Return the SQLAlchemy URL for the local staging SQLite file."""
-        return f"sqlite:///{self.local_db_path.as_posix()}"
-
-    @property
-    def local_media_root(self) -> Path:
-        """Return the fixed media directory below LOCAL_STAGE_ROOT."""
-        return self.local_stage_root / LOCAL_MEDIA_DIRNAME
+    def media_root(self) -> Path:
+        """Return the fixed media directory below DATA_ROOT."""
+        return self.data_root / MEDIA_DIRNAME
 
 
 def resolve_config_path(
@@ -81,15 +72,6 @@ def resolve_config_path(
     selected_path = config_path or os.environ.get(CONFIG_PATH_ENV)
     path = Path(selected_path) if selected_path else DEFAULT_CONFIG_PATH
     return path.expanduser().resolve()
-
-
-def load_config(
-    config_path: str | Path | None = None,
-) -> AppConfig:
-    """Read and validate a ytcrawl YAML configuration without caching it."""
-    path = resolve_config_path(config_path)
-    return _load_config_file(path)
-
 
 def get_config(
     config_path: str | Path | None = None,
@@ -144,8 +126,6 @@ def _load_config_file(path: Path) -> AppConfig:
         "REMOTE_GIT_BARE",
         "REMOTE_APP_DIR",
         "REMOTE_DATA_ROOT",
-        "REMOTE_DB_PATH",
-        "REMOTE_MEDIA_ROOT",
         "REMOTE_INCOMING_ROOT",
         "REMOTE_BACKUP_ROOT",
         "SERVER_VENV",
@@ -154,10 +134,10 @@ def _load_config_file(path: Path) -> AppConfig:
         key: _read_remote_path(raw_config, key) for key in remote_path_keys
     }
 
-    local_stage_value = _read_string(raw_config, "LOCAL_STAGE_ROOT")
-    local_stage_root = Path(local_stage_value).expanduser()
-    if not local_stage_root.is_absolute():
-        raise ConfigError("LOCAL_STAGE_ROOT must be an absolute path.")
+    data_root_value = _read_string(raw_config, "DATA_ROOT")
+    data_root = Path(data_root_value).expanduser()
+    if not data_root.is_absolute():
+        raise ConfigError("DATA_ROOT must be an absolute path.")
 
     review_port = raw_config["REVIEW_PORT"]
     if isinstance(review_port, bool) or not isinstance(review_port, int):
@@ -170,12 +150,10 @@ def _load_config_file(path: Path) -> AppConfig:
         remote_git_bare=remote_paths["REMOTE_GIT_BARE"],
         remote_app_dir=remote_paths["REMOTE_APP_DIR"],
         remote_data_root=remote_paths["REMOTE_DATA_ROOT"],
-        remote_db_path=remote_paths["REMOTE_DB_PATH"],
-        remote_media_root=remote_paths["REMOTE_MEDIA_ROOT"],
         remote_incoming_root=remote_paths["REMOTE_INCOMING_ROOT"],
         remote_backup_root=remote_paths["REMOTE_BACKUP_ROOT"],
         server_venv=remote_paths["SERVER_VENV"],
-        local_stage_root=local_stage_root,
+        data_root=data_root,
         review_host=_read_string(raw_config, "REVIEW_HOST"),
         review_port=review_port,
         config_path=path,

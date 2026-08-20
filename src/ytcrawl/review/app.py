@@ -22,9 +22,9 @@ def create_app(
 ) -> FastAPI:
     if db_url is None or media_root is None:
         config = get_config()
-        selected_db_url = config.remote_db_url if db_url is None else db_url
+        selected_db_url = config.db_url if db_url is None else db_url
         selected_media_root_value = (
-            config.remote_media_root if media_root is None else media_root
+            config.media_root if media_root is None else media_root
         )
     else:
         selected_db_url = db_url
