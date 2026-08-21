@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -16,11 +15,9 @@ MEDIA_DIRNAME = "media"
 TEMP_DIRNAME = "Temp"
 BACKUP_DIRNAME = "Backup"
 
-_PLACEHOLDER_PATTERN = re.compile(r"<[^>]+>")
-
 
 class ConfigError(ValueError):
-    """Raised when the ytcrawl configuration is missing or invalid."""
+    """Raised when the ytcrawl configuration cannot be read."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,14 +135,6 @@ def _load_config_file(path: Path) -> AppConfig:
 
     data_root_value = _read_string(raw_config, "DATA_ROOT")
     data_root = Path(data_root_value).expanduser()
-    if not data_root.is_absolute():
-        raise ConfigError("DATA_ROOT must be an absolute path.")
-
-    review_port = raw_config["REVIEW_PORT"]
-    if isinstance(review_port, bool) or not isinstance(review_port, int):
-        raise ConfigError("REVIEW_PORT must be an integer.")
-    if not 1 <= review_port <= 65535:
-        raise ConfigError("REVIEW_PORT must be between 1 and 65535.")
 
     return AppConfig(
         remote_ssh_alias=_read_string(raw_config, "REMOTE_SSH_ALIAS"),
@@ -154,27 +143,22 @@ def _load_config_file(path: Path) -> AppConfig:
         remote_data_root=remote_paths["REMOTE_DATA_ROOT"],
         remote_venv=remote_paths["REMOTE_VENV"],
         data_root=data_root,
-        review_host=_read_string(raw_config, "REVIEW_HOST"),
-        review_port=review_port,
+        review_host=_read_string(raw_config, "REVIEW_HOST", "127.0.0.1"),
+        review_port=raw_config.get("REVIEW_PORT", 8765),
         config_path=path,
     )
 
 
-def _read_string(config: Mapping[object, object], key: str) -> str:
-    value = config[key]
-    if not isinstance(value, str) or not value.strip():
-        raise ConfigError(f"{key} must be a non-empty string.")
-    value = value.strip()
-    if _PLACEHOLDER_PATTERN.search(value):
-        raise ConfigError(f"{key} still contains a <...> placeholder.")
-    return value
+def _read_string(
+    config: Mapping[object, object],
+    key: str,
+    default: object = "",
+) -> str:
+    return str(config.get(key, default)).strip()
 
 
 def _read_remote_path(
     config: Mapping[object, object],
     key: str,
 ) -> PurePosixPath:
-    path = PurePosixPath(_read_string(config, key))
-    if not path.is_absolute():
-        raise ConfigError(f"{key} must be an absolute POSIX path.")
-    return path
+    return PurePosixPath(_read_string(config, key))
