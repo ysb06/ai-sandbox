@@ -69,20 +69,8 @@ def synchronize(
 
     if direction == "push":
         _local_preflight(config, local_role, component)
-        inspection = _remote_action(
-            config,
-            "inspect",
-            runner=selected_runner,
-        )
-        _validate_remote_inspection(config, inspection)
         _remote_preflight(config, remote_role, component, selected_runner)
     else:
-        inspection = _remote_action(
-            config,
-            "inspect",
-            runner=selected_runner,
-        )
-        _validate_remote_inspection(config, inspection)
         _remote_preflight(config, remote_role, component, selected_runner)
         _local_preflight(config, local_role, component)
 
@@ -215,8 +203,6 @@ def build_remote_helper_command(
         "--config",
         str(remote_config),
         action,
-        "--expected-data-root",
-        str(config.remote_data_root),
         *options,
     ]
     remote_command = (
@@ -254,7 +240,6 @@ def _sync_database(
         if direction == "push":
             peer.snapshot_database(
                 config,
-                expected_data_root=config.data_root,
                 artifact_id=artifact_id,
             )
         else:
@@ -282,7 +267,6 @@ def _sync_database(
         else:
             result = peer.promote_database(
                 config,
-                expected_data_root=config.data_root,
                 artifact_id=artifact_id,
             )
     except Exception as exc:  # noqa: BLE001 - retain error through cleanup.
@@ -292,7 +276,6 @@ def _sync_database(
     try:
         peer.cleanup_artifact(
             config,
-            expected_data_root=config.data_root,
             artifact_id=artifact_id,
         )
     except Exception as exc:  # noqa: BLE001 - report exact cleanup failure.
@@ -325,7 +308,6 @@ def _local_preflight(
     try:
         peer.preflight_peer(
             config,
-            expected_data_root=config.data_root,
             role=role,
             component=component,
         )
@@ -406,31 +388,6 @@ def _parse_json_result(output: str | None, action: str) -> dict[str, Any]:
         if isinstance(result, dict):
             return result
     raise SyncError(f"Remote {action} returned no valid JSON result.")
-
-
-def _validate_remote_inspection(
-    config: AppConfig,
-    inspection: dict[str, Any],
-) -> None:
-    if inspection.get("protocol") != peer.SYNC_PROTOCOL_VERSION:
-        raise SyncError(
-            "Remote sync protocol mismatch: "
-            f"expected {peer.SYNC_PROTOCOL_VERSION}, "
-            f"received {inspection.get('protocol')!r}."
-        )
-    expected_paths = {
-        "data_root": config.remote_data_root,
-        "db_path": config.remote_db_path,
-        "media_root": config.remote_media_root,
-        "temp_root": config.remote_temp_root,
-        "backup_root": config.remote_backup_root,
-    }
-    for name, expected in expected_paths.items():
-        if inspection.get(name) != str(expected):
-            raise SyncError(
-                f"Remote {name} mismatch: expected {expected}, "
-                f"received {inspection.get(name)!r}."
-            )
 
 
 def _remote_relative_path(

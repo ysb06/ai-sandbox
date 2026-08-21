@@ -16,18 +16,6 @@ MEDIA_DIRNAME = "media"
 TEMP_DIRNAME = "Temp"
 BACKUP_DIRNAME = "Backup"
 
-_REQUIRED_KEYS = frozenset(
-    {
-        "REMOTE_SSH_ALIAS",
-        "REMOTE_GIT_BARE",
-        "REMOTE_APP_DIR",
-        "REMOTE_DATA_ROOT",
-        "REMOTE_VENV",
-        "DATA_ROOT",
-        "REVIEW_HOST",
-        "REVIEW_PORT",
-    }
-)
 _PLACEHOLDER_PATTERN = re.compile(r"<[^>]+>")
 
 
@@ -105,7 +93,7 @@ def resolve_config_path(
 def get_config(
     config_path: str | Path | None = None,
 ) -> AppConfig:
-    """Read and cache a validated ytcrawl configuration by absolute path."""
+    """Read and cache a ytcrawl configuration by absolute path."""
     path = resolve_config_path(config_path)
     return _get_cached_config(path)
 
@@ -137,19 +125,6 @@ def _load_config_file(path: Path) -> AppConfig:
 
     if not isinstance(raw_config, Mapping):
         raise ConfigError(f"Configuration root must be a YAML mapping: {path}")
-
-    keys = set(raw_config)
-    missing_keys = sorted(_REQUIRED_KEYS - keys)
-    unknown_keys = sorted(keys - _REQUIRED_KEYS, key=str)
-    if missing_keys:
-        raise ConfigError(
-            "Missing configuration keys: " + ", ".join(missing_keys)
-        )
-    if unknown_keys:
-        raise ConfigError(
-            "Unknown configuration keys: "
-            + ", ".join(str(key) for key in unknown_keys)
-        )
 
     remote_path_keys = (
         "REMOTE_GIT_BARE",

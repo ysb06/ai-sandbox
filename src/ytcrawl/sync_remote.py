@@ -9,12 +9,11 @@ import stat
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Literal
 
 from ytcrawl.config import AppConfig, ConfigError, get_config
 
-SYNC_PROTOCOL_VERSION = 1
 MEDIA_RSYNC_PARTIAL_DIRNAME = "MediaRsync"
 _ARTIFACT_PREFIX = "ytcrawl-db-"
 _ARTIFACT_SUFFIX = ".sqlite3"
@@ -49,34 +48,13 @@ def artifact_path(config: AppConfig, artifact_id: str) -> Path:
     return config.temp_root / artifact_filename(artifact_id)
 
 
-def inspect_peer(
-    config: AppConfig,
-    *,
-    expected_data_root: str | Path,
-) -> dict[str, object]:
-    """Describe a peer after confirming its configured DATA_ROOT identity."""
-    _verify_data_root(config, expected_data_root)
-    return {
-        "protocol": SYNC_PROTOCOL_VERSION,
-        "data_root": config.data_root.as_posix(),
-        "db_path": config.db_path.as_posix(),
-        "media_root": config.media_root.as_posix(),
-        "db_exists": config.db_path.is_file(),
-        "media_exists": config.media_root.is_dir(),
-        "temp_root": config.temp_root.as_posix(),
-        "backup_root": config.backup_root.as_posix(),
-    }
-
-
 def preflight_peer(
     config: AppConfig,
     *,
-    expected_data_root: str | Path,
     role: PeerRole,
     component: SyncComponent,
 ) -> dict[str, object]:
     """Validate source inputs or prepare destination directories."""
-    _verify_data_root(config, expected_data_root)
     if component not in ("db", "media", "all"):
         raise PeerSyncError(f"Unsupported synchronization component: {component}")
     include_db = component in ("db", "all")
@@ -106,19 +84,15 @@ def preflight_peer(
     else:
         raise PeerSyncError(f"Unsupported peer role: {role}")
 
-    result = inspect_peer(config, expected_data_root=expected_data_root)
-    result.update({"role": role, "component": component})
-    return result
+    return {"role": role, "component": component}
 
 
 def snapshot_database(
     config: AppConfig,
     *,
-    expected_data_root: str | Path,
     artifact_id: str,
 ) -> dict[str, object]:
     """Create a consistent SQLite snapshot in the peer temporary root."""
-    _verify_data_root(config, expected_data_root)
     if not config.db_path.is_file():
         raise PeerSyncError(f"Source database not found: {config.db_path}")
 
@@ -137,11 +111,9 @@ def snapshot_database(
 def promote_database(
     config: AppConfig,
     *,
-    expected_data_root: str | Path,
     artifact_id: str,
 ) -> dict[str, object]:
     """Back up the destination DB and atomically promote a staged snapshot."""
-    _verify_data_root(config, expected_data_root)
     stage = artifact_path(config, artifact_id)
     if not stage.is_file():
         raise PeerSyncError(f"Staged database not found: {stage}")
@@ -149,7 +121,6 @@ def promote_database(
     config.data_root.mkdir(parents=True, exist_ok=True)
     config.backup_root.mkdir(parents=True, exist_ok=True)
     _require_same_filesystem(config.data_root, config.temp_root)
-    _quick_check(stage)
 
     previous_mode = 0o600
     backup: Path | None = None
@@ -184,11 +155,9 @@ def promote_database(
 def cleanup_artifact(
     config: AppConfig,
     *,
-    expected_data_root: str | Path,
     artifact_id: str,
 ) -> dict[str, object]:
     """Remove one exact staging artifact and its SQLite sidecars."""
-    _verify_data_root(config, expected_data_root)
     stage = artifact_path(config, artifact_id)
     removed = False
     for path in (stage, *(_sidecar_paths(stage))):
@@ -200,19 +169,6 @@ def cleanup_artifact(
         except OSError as exc:
             raise PeerSyncError(f"Failed to remove artifact {path}: {exc}") from exc
     return {"artifact": stage.name, "removed": removed}
-
-
-def _verify_data_root(
-    config: AppConfig,
-    expected_data_root: str | Path,
-) -> None:
-    configured = PurePosixPath(config.data_root.as_posix())
-    expected = PurePosixPath(str(expected_data_root))
-    if configured != expected:
-        raise PeerSyncError(
-            "Remote DATA_ROOT identity mismatch: "
-            f"expected {expected}, peer configured {configured}."
-        )
 
 
 def _require_same_filesystem(first: Path, second: Path) -> None:
@@ -357,11 +313,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", help="Peer config.yaml path.")
     subparsers = parser.add_subparsers(dest="action", required=True)
 
-    inspect_parser = subparsers.add_parser("inspect")
-    _add_identity_argument(inspect_parser)
-
     preflight_parser = subparsers.add_parser("preflight")
-    _add_identity_argument(preflight_parser)
     preflight_parser.add_argument(
         "--role", choices=("source", "destination"), required=True
     )
@@ -371,14 +323,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     for action in ("snapshot", "promote", "cleanup"):
         action_parser = subparsers.add_parser(action)
-        _add_identity_argument(action_parser)
         action_parser.add_argument("--artifact-id", required=True)
 
     return parser
-
-
-def _add_identity_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--expected-data-root", required=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -390,33 +337,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     try:
-        if args.action == "inspect":
-            result = inspect_peer(
-                config, expected_data_root=args.expected_data_root
-            )
-        elif args.action == "preflight":
+        if args.action == "preflight":
             result = preflight_peer(
                 config,
-                expected_data_root=args.expected_data_root,
                 role=args.role,
                 component=args.component,
             )
         elif args.action == "snapshot":
             result = snapshot_database(
                 config,
-                expected_data_root=args.expected_data_root,
                 artifact_id=args.artifact_id,
             )
         elif args.action == "promote":
             result = promote_database(
                 config,
-                expected_data_root=args.expected_data_root,
                 artifact_id=args.artifact_id,
             )
         else:
             result = cleanup_artifact(
                 config,
-                expected_data_root=args.expected_data_root,
                 artifact_id=args.artifact_id,
             )
     except PeerSyncError as exc:
