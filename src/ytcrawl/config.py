@@ -13,16 +13,16 @@ CONFIG_PATH_ENV = "YTCRAWL_CONFIG"
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
 DB_FILENAME = "ytcrawl.sqlite3"
 MEDIA_DIRNAME = "media"
+TEMP_DIRNAME = "Temp"
+BACKUP_DIRNAME = "Backup"
 
 _REQUIRED_KEYS = frozenset(
     {
-        "DASH_SSH_ALIAS",
+        "REMOTE_SSH_ALIAS",
         "REMOTE_GIT_BARE",
         "REMOTE_APP_DIR",
         "REMOTE_DATA_ROOT",
-        "REMOTE_INCOMING_ROOT",
-        "REMOTE_BACKUP_ROOT",
-        "SERVER_VENV",
+        "REMOTE_VENV",
         "DATA_ROOT",
         "REVIEW_HOST",
         "REVIEW_PORT",
@@ -37,13 +37,11 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class AppConfig:
-    dash_ssh_alias: str
+    remote_ssh_alias: str
     remote_git_bare: PurePosixPath
     remote_app_dir: PurePosixPath
     remote_data_root: PurePosixPath
-    remote_incoming_root: PurePosixPath
-    remote_backup_root: PurePosixPath
-    server_venv: PurePosixPath
+    remote_venv: PurePosixPath
     data_root: Path
     review_host: str
     review_port: int
@@ -64,6 +62,36 @@ class AppConfig:
         """Return the fixed media directory below DATA_ROOT."""
         return self.data_root / MEDIA_DIRNAME
 
+    @property
+    def temp_root(self) -> Path:
+        """Return the local synchronization staging directory."""
+        return self.data_root / TEMP_DIRNAME
+
+    @property
+    def backup_root(self) -> Path:
+        """Return the local synchronization backup directory."""
+        return self.data_root / BACKUP_DIRNAME
+
+    @property
+    def remote_db_path(self) -> PurePosixPath:
+        """Return the fixed remote SQLite path below REMOTE_DATA_ROOT."""
+        return self.remote_data_root / DB_FILENAME
+
+    @property
+    def remote_media_root(self) -> PurePosixPath:
+        """Return the fixed remote media directory below REMOTE_DATA_ROOT."""
+        return self.remote_data_root / MEDIA_DIRNAME
+
+    @property
+    def remote_temp_root(self) -> PurePosixPath:
+        """Return the remote synchronization staging directory."""
+        return self.remote_data_root / TEMP_DIRNAME
+
+    @property
+    def remote_backup_root(self) -> PurePosixPath:
+        """Return the remote synchronization backup directory."""
+        return self.remote_data_root / BACKUP_DIRNAME
+
 
 def resolve_config_path(
     config_path: str | Path | None = None,
@@ -72,6 +100,7 @@ def resolve_config_path(
     selected_path = config_path or os.environ.get(CONFIG_PATH_ENV)
     path = Path(selected_path) if selected_path else DEFAULT_CONFIG_PATH
     return path.expanduser().resolve()
+
 
 def get_config(
     config_path: str | Path | None = None,
@@ -126,9 +155,7 @@ def _load_config_file(path: Path) -> AppConfig:
         "REMOTE_GIT_BARE",
         "REMOTE_APP_DIR",
         "REMOTE_DATA_ROOT",
-        "REMOTE_INCOMING_ROOT",
-        "REMOTE_BACKUP_ROOT",
-        "SERVER_VENV",
+        "REMOTE_VENV",
     )
     remote_paths = {
         key: _read_remote_path(raw_config, key) for key in remote_path_keys
@@ -146,13 +173,11 @@ def _load_config_file(path: Path) -> AppConfig:
         raise ConfigError("REVIEW_PORT must be between 1 and 65535.")
 
     return AppConfig(
-        dash_ssh_alias=_read_string(raw_config, "DASH_SSH_ALIAS"),
+        remote_ssh_alias=_read_string(raw_config, "REMOTE_SSH_ALIAS"),
         remote_git_bare=remote_paths["REMOTE_GIT_BARE"],
         remote_app_dir=remote_paths["REMOTE_APP_DIR"],
         remote_data_root=remote_paths["REMOTE_DATA_ROOT"],
-        remote_incoming_root=remote_paths["REMOTE_INCOMING_ROOT"],
-        remote_backup_root=remote_paths["REMOTE_BACKUP_ROOT"],
-        server_venv=remote_paths["SERVER_VENV"],
+        remote_venv=remote_paths["REMOTE_VENV"],
         data_root=data_root,
         review_host=_read_string(raw_config, "REVIEW_HOST"),
         review_port=review_port,
