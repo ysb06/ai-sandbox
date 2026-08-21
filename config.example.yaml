@@ -1,17 +1,17 @@
 # Copy this file to config.yaml and replace every <...> placeholder.
 # config.yaml is intentionally excluded from Git.
 
-DASH_SSH_ALIAS: "<DASH_SSH_ALIAS>"
+REMOTE_SSH_ALIAS: "<REMOTE_SSH_ALIAS>"
 REMOTE_GIT_BARE: "<REMOTE_GIT_BARE>"
 REMOTE_APP_DIR: "<REMOTE_APP_DIR>"
 REMOTE_DATA_ROOT: "<REMOTE_DATA_ROOT>"
-REMOTE_INCOMING_ROOT: "<REMOTE_INCOMING_ROOT>"
-REMOTE_BACKUP_ROOT: "<REMOTE_BACKUP_ROOT>"
-SERVER_VENV: "<SERVER_VENV>"
+REMOTE_VENV: "<REMOTE_VENV>"
 
 # Runtime data layout on this host:
 #   <DATA_ROOT>/ytcrawl.sqlite3
 #   <DATA_ROOT>/media/
+#   <DATA_ROOT>/Temp/
+#   <DATA_ROOT>/Backup/
 DATA_ROOT: "<DATA_ROOT>"
 REVIEW_HOST: "0.0.0.0"
 REVIEW_PORT: 8765
