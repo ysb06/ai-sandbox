@@ -45,7 +45,16 @@ def find_failed_video_records(
     )
 
 
-def main() -> int:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="ytcrawl.crawl.recovery",
+        description="Retry stored YouTube videos whose latest download failed.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parse_args(argv)
     try:
         config = get_config()
     except ConfigError as exc:
@@ -65,13 +74,18 @@ def main() -> int:
             print("No failed downloads to recover.")
             return 0
 
-        successes, failures = crawl_youtube_videos(config.media_root, video_records)
+        result = crawl_youtube_videos(config.media_root, video_records)
     except Exception as exc:  # noqa: BLE001 - report CLI recovery failures.
         print(f"Recovery error: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Recovered {successes} videos, failed {failures}.")
-    return 1 if failures else 0
+    print(
+        f"Recovered {result.successes} videos, failed {result.failures}, "
+        f"user declined {result.user_declined}, deferred {result.deferred}; "
+        f"attempted {result.attempted_unique_videos} unique videos, "
+        f"remaining {result.remaining_unique_videos} unique videos."
+    )
+    return 1 if (result.total_failures or result.halt_error_type) else 0
 
 
 if __name__ == "__main__":

@@ -114,11 +114,26 @@ def crawl_youtube_channel(
 
     download_successes = 0
     download_failures = 0
+    download_user_declined = 0
+    download_deferred = 0
+    download_total_failures = 0
+    download_halt_error_type = None
+    download_attempted_unique = 0
+    download_remaining_unique = 0
     if download_records:
-        download_successes, download_failures = download.crawl_youtube_videos(
+        download_result = download.crawl_youtube_videos(
             str(output_dir),
             download_records,
+            continuation_prompt=download.prompt_for_next_batch,
         )
+        download_successes = download_result.successes
+        download_failures = download_result.failures
+        download_user_declined = download_result.user_declined
+        download_deferred = download_result.deferred
+        download_total_failures = download_result.total_failures
+        download_halt_error_type = download_result.halt_error_type
+        download_attempted_unique = download_result.attempted_unique_videos
+        download_remaining_unique = download_result.remaining_unique_videos
 
     print(
         f"Saved {item_count} videos from channel upload run {run_id}, page {page}; "
@@ -128,11 +143,16 @@ def crawl_youtube_channel(
         f"embed codes saved {embed_successes}, "
         f"embed code failed {embed_failures}; "
         f"downloaded {download_successes}, "
-        f"download failed {download_failures}."
+        f"download failed {download_failures}, "
+        f"download user declined {download_user_declined}, "
+        f"download deferred {download_deferred}; "
+        f"download attempted {download_attempted_unique} unique videos, "
+        f"download remaining {download_remaining_unique} unique videos."
     )
     return 1 if (
         playlist_item_failures
         or detail_result.failures
         or embed_failures
-        or download_failures
+        or download_total_failures
+        or download_halt_error_type
     ) else 0

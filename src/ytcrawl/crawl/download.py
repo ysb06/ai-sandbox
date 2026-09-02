@@ -5,7 +5,8 @@ import random
 import re
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from ytcrawl.config import ConfigError, get_config
@@ -18,24 +19,109 @@ from ytcrawl.download.youtube import (
     download as download_youtube,
 )
 
-DOWNLOAD_SLEEP_SECONDS_RANGE = (10.0, 60.0)
+DOWNLOAD_SLEEP_SECONDS_RANGE = (60.0, 180.0)
+DOWNLOAD_BATCH_SIZE = 5
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 BOT_CHECK_ERROR_TYPE = "bot_check_required"
+HTTP_403_ERROR_TYPE = "http_403_forbidden"
+HTTP_429_ERROR_TYPE = "http_429_too_many_requests"
+DEFERRED_AFTER_SAFETY_STOP_ERROR_TYPE = "deferred_after_safety_stop"
+USER_DECLINED_CONTINUATION_ERROR_TYPE = "user_declined_continuation"
+SAFETY_STOP_ERROR_TYPES = frozenset(
+    {BOT_CHECK_ERROR_TYPE, HTTP_403_ERROR_TYPE, HTTP_429_ERROR_TYPE}
+)
+TERMINAL_ERROR_TYPES = SAFETY_STOP_ERROR_TYPES
+
+ContinuationPrompt = Callable[[int, int], bool]
+
+
+@dataclass(frozen=True)
+class DownloadCrawlResult:
+    successes: int = 0
+    failures: int = 0
+    user_declined: int = 0
+    deferred: int = 0
+    attempted_unique_videos: int = 0
+    remaining_unique_videos: int = 0
+    halt_error_type: str | None = None
+    batch_limit_reached: bool = False
+
+    @property
+    def total_failures(self) -> int:
+        return self.failures + self.user_declined
 
 
 def clean_download_error_message(exc: Exception) -> str:
     return ANSI_ESCAPE_PATTERN.sub("", str(exc))
 
 
+def _coerce_http_status(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        status = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return status if 100 <= status <= 599 else None
+
+
+def _exception_http_status(exc: Exception) -> int | None:
+    pending: list[BaseException] = [exc]
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in visited:
+            continue
+        visited.add(id(current))
+
+        for attribute in ("http_status", "status", "status_code", "code"):
+            status = _coerce_http_status(getattr(current, attribute, None))
+            if status is not None:
+                return status
+
+        response = getattr(current, "response", None)
+        if response is not None:
+            for attribute in ("status", "status_code"):
+                status = _coerce_http_status(getattr(response, attribute, None))
+                if status is not None:
+                    return status
+
+        for nested in (
+            getattr(current, "__cause__", None),
+            getattr(current, "__context__", None),
+            getattr(current, "cause", None),
+        ):
+            if isinstance(nested, BaseException):
+                pending.append(nested)
+    return None
+
+
 def classify_download_error(exc: Exception) -> str:
+    http_status = _exception_http_status(exc)
+    if http_status == 403:
+        return HTTP_403_ERROR_TYPE
+    if http_status == 429:
+        return HTTP_429_ERROR_TYPE
+
     message = clean_download_error_message(exc).lower()
     if (
         "sign in to confirm" in message
         and "not a bot" in message
     ) or "--cookies-from-browser" in message or "--cookies" in message:
         return BOT_CHECK_ERROR_TYPE
-    if "http error 403" in message or "403: forbidden" in message:
-        return "http_403_forbidden"
+    if (
+        "http error 403" in message
+        or "403: forbidden" in message
+        or re.search(r"\bhttp(?: status)?\s+403\b", message)
+    ):
+        return HTTP_403_ERROR_TYPE
+    if (
+        "http error 429" in message
+        or "429: too many requests" in message
+        or re.search(r"\bhttp(?: status)?\s+429\b", message)
+        or re.search(r"\bstatus code:?\s*429\b", message)
+    ):
+        return HTTP_429_ERROR_TYPE
     if ("bytes read" in message and "more expected" in message) or (
         "content too short" in message
     ):
@@ -83,10 +169,59 @@ def mark_download_attempts_failed(
         )
 
 
+def record_unrequested_downloads(
+    video_items: Sequence[tuple[str, list[int]]],
+    *,
+    error_type: str,
+    error_message: str,
+) -> int:
+    recorded = 0
+    if not video_items:
+        return recorded
+
+    with core.session_scope() as session:
+        for _, record_ids in video_items:
+            attempt_ids = create_download_attempts(session, record_ids)
+            mark_download_attempts_failed(
+                session,
+                attempt_ids,
+                error_type=error_type,
+                error_message=error_message,
+            )
+            recorded += len(record_ids)
+    return recorded
+
+
+def prompt_for_next_batch(
+    processed_unique_videos: int,
+    remaining_unique_videos: int,
+) -> bool:
+    print(
+        f"Processed {processed_unique_videos} unique videos; "
+        f"{remaining_unique_videos} remain."
+    )
+    try:
+        response = input("Continue downloading the next batch? [y/N] ")
+    except EOFError:
+        print(
+            "No input was available; continuation was declined. "
+            "No network request will be made for the remaining videos.",
+            file=sys.stderr,
+        )
+        return False
+    return response.strip().lower() in {"y", "yes"}
+
+
 def crawl_youtube_videos(
     output_dir: str | Path,
     video_records: tuple[videos.VideoRecord, ...],
-) -> tuple[int, int]:
+    *,
+    batch_size: int = DOWNLOAD_BATCH_SIZE,
+    continuation_prompt: ContinuationPrompt | None = None,
+) -> DownloadCrawlResult:
+    if batch_size <= 0:
+        raise ValueError("batch_size must be greater than zero")
+
     output_root = Path(output_dir).expanduser().resolve()
     record_ids_by_video_id = group_video_record_ids_by_video_id(video_records)
     missing_video_id_count = len(video_records) - sum(
@@ -101,20 +236,54 @@ def crawl_youtube_videos(
 
     failures = missing_video_id_count
     successes = 0
+    user_declined = 0
+    deferred = 0
+    attempted_unique_videos = 0
+    remaining_unique_videos = 0
+    halt_error_type: str | None = None
+    batch_limit_reached = False
     video_items = list(record_ids_by_video_id.items())
     for item_index, (video_id, record_ids) in enumerate(video_items):
+        if item_index > 0 and item_index % batch_size == 0:
+            batch_limit_reached = True
+            remaining_items = video_items[item_index:]
+            remaining_unique_videos = len(remaining_items)
+            if continuation_prompt is None:
+                break
+            if not continuation_prompt(
+                attempted_unique_videos,
+                remaining_unique_videos,
+            ):
+                declined_message = (
+                    "No network request was made because the user declined "
+                    f"continuation after {attempted_unique_videos} unique videos."
+                )
+                user_declined = record_unrequested_downloads(
+                    remaining_items,
+                    error_type=USER_DECLINED_CONTINUATION_ERROR_TYPE,
+                    error_message=declined_message,
+                )
+                print(
+                    f"Continuation declined; {remaining_unique_videos} unique "
+                    "videos were not requested from the network.",
+                    file=sys.stderr,
+                )
+                break
+            remaining_unique_videos = 0
+
         if item_index > 0:
             sleep_before_next_download()
 
         with core.session_scope() as session:
             attempt_ids = create_download_attempts(session, record_ids)
+        attempted_unique_videos += 1
 
         try:
             downloaded_path = Path(
                 download_youtube(video_id, output_root, overwrite=False)
             ).resolve()
             stored_path = downloaded_path.relative_to(output_root).as_posix()
-        except Exception as exc:  # noqa: BLE001 - keep crawling remaining videos.
+        except Exception as exc:  # noqa: BLE001 - classify before deciding whether to stop.
             error_type = classify_download_error(exc)
             error_message = clean_download_error_message(exc)
             with core.session_scope() as session:
@@ -126,24 +295,25 @@ def crawl_youtube_videos(
                 )
             failures += len(record_ids)
             print(f"Failed to download {video_id}: {exc}", file=sys.stderr)
-            if error_type == BOT_CHECK_ERROR_TYPE:
+            if error_type in SAFETY_STOP_ERROR_TYPES:
                 remaining_items = video_items[item_index + 1 :]
-                skipped_message = (
-                    f"Skipped after bot check on {video_id}: {error_message}"
+                remaining_unique_videos = len(remaining_items)
+                halt_error_type = error_type
+                deferred_message = (
+                    "No network request was made because downloads were deferred "
+                    f"after {error_type} occurred on {video_id}: {error_message}"
                 )
-                with core.session_scope() as session:
-                    for _, skipped_record_ids in remaining_items:
-                        skipped_attempt_ids = create_download_attempts(
-                            session,
-                            skipped_record_ids,
-                        )
-                        mark_download_attempts_failed(
-                            session,
-                            skipped_attempt_ids,
-                            error_type=BOT_CHECK_ERROR_TYPE,
-                            error_message=skipped_message,
-                        )
-                        failures += len(skipped_record_ids)
+                deferred = record_unrequested_downloads(
+                    remaining_items,
+                    error_type=DEFERRED_AFTER_SAFETY_STOP_ERROR_TYPE,
+                    error_message=deferred_message,
+                )
+                print(
+                    f"Safety stop activated by {error_type}; "
+                    f"{remaining_unique_videos} unique videos were deferred "
+                    "without network requests.",
+                    file=sys.stderr,
+                )
                 break
             continue
 
@@ -163,13 +333,30 @@ def crawl_youtube_videos(
                 )
         successes += len(record_ids)
 
-    return (successes, failures)
+    return DownloadCrawlResult(
+        successes=successes,
+        failures=failures,
+        user_declined=user_declined,
+        deferred=deferred,
+        attempted_unique_videos=attempted_unique_videos,
+        remaining_unique_videos=remaining_unique_videos,
+        halt_error_type=halt_error_type,
+        batch_limit_reached=batch_limit_reached,
+    )
 
 
-def crawl_missing_youtube_videos(output_dir: str | Path) -> tuple[int, int]:
+def crawl_missing_youtube_videos(
+    output_dir: str | Path,
+    *,
+    continuation_prompt: ContinuationPrompt | None = None,
+) -> DownloadCrawlResult:
     with core.session_scope() as session:
         video_records = videos.find_video_records_needing_download(session)
-    return crawl_youtube_videos(output_dir, video_records)
+    return crawl_youtube_videos(
+        output_dir,
+        video_records,
+        continuation_prompt=continuation_prompt,
+    )
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -190,9 +377,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     core.configure(config.db_url)
     core.create_all()
 
-    successes, failures = crawl_missing_youtube_videos(config.media_root)
-    print(f"Downloaded {successes} videos, failed {failures}.")
-    return 1 if failures else 0
+    result = crawl_missing_youtube_videos(
+        config.media_root,
+        continuation_prompt=prompt_for_next_batch,
+    )
+    print(
+        f"Downloaded {result.successes} videos, failed {result.failures}, "
+        f"user declined {result.user_declined}, deferred {result.deferred}; "
+        f"attempted {result.attempted_unique_videos} unique videos, "
+        f"remaining {result.remaining_unique_videos} unique videos."
+    )
+    return 1 if (result.total_failures or result.halt_error_type) else 0
 
 
 if __name__ == "__main__":
