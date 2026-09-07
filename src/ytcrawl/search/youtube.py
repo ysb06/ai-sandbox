@@ -17,6 +17,7 @@ FIXED_SEARCH_PARAMS: dict[str, Any] = {
 COLLECTION_METHOD = "search"
 DEFAULT_VIDEO_LICENSE = "creativeCommon"
 ANY_VIDEO_LICENSE = "any"
+EXCLUDED_LIVE_BROADCAST_CONTENT = frozenset({"live", "upcoming"})
 
 PRESET_QUERIES: dict[str, str] = {
     "facecam": "facecam face person",
@@ -24,7 +25,56 @@ PRESET_QUERIES: dict[str, str] = {
     "selfie": "selfie face video",
     "talking-head": '"talking head" face person',
     "vlog": "vlog face person",
+    "cctv": "cctv security camera surveillance",
+    "webcam-talk": "webcam talking -vtuber -avatar",
+    "self-introduction": '"self introduction" video -animation',
+    "self-tape": '"self tape" monologue',
+    "video-podcast": '"video podcast" guest',
+    "storytime": "storytime vlog -animation",
+    "reaction": '"reaction video" facecam -vtuber',
+    "grwm": '"get ready with me" -animation',
+    "street-interview": '"street interview" -animation',
+    "panel-discussion": '"panel discussion" -animation',
+    "press-conference": '"press conference" speaker',
+    "online-lecture": '"online lecture" instructor',
+    "sign-language": '"sign language interpreter"',
+    "livestream-webcam": '"live stream" webcam -gameplay -vtuber',
+    "cooking-host": '"cooking tutorial" host',
+    "fitness-instructor": '"fitness instructor" workout',
 }
+
+
+def get_live_broadcast_content(item: dict[str, Any]) -> str | None:
+    snippet = item.get("snippet")
+    if not isinstance(snippet, dict):
+        return None
+    value = snippet.get("liveBroadcastContent")
+    return value.lower() if isinstance(value, str) else None
+
+
+def exclude_live_search_results(
+    response: dict[str, Any],
+) -> tuple[dict[str, Any], tuple[dict[str, Any], ...]]:
+    """Return a response copy without active or upcoming live broadcasts."""
+    items = response.get("items")
+    if not isinstance(items, list):
+        return dict(response), ()
+
+    included: list[Any] = []
+    excluded: list[dict[str, Any]] = []
+    for item in items:
+        if (
+            isinstance(item, dict)
+            and get_live_broadcast_content(item)
+            in EXCLUDED_LIVE_BROADCAST_CONTENT
+        ):
+            excluded.append(item)
+        else:
+            included.append(item)
+
+    filtered_response = dict(response)
+    filtered_response["items"] = included
+    return filtered_response, tuple(excluded)
 
 
 def resolve_query(args: argparse.Namespace) -> str:

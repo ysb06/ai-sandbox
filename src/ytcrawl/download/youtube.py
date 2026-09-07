@@ -10,12 +10,17 @@ from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError
 from yt_dlp.version import __version__ as YT_DLP_VERSION
 
+from ytcrawl.download.errors import LiveVideoExcludedError
+
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 YOUTUBE_WATCH_URL = "https://www.youtube.com/watch?v={video_id}"
 DOWNLOAD_FORMAT = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best[ext=mp4]/best"
 DOWNLOADER_LABEL = f"yt-dlp={YT_DLP_VERSION}"
 TEMPORARY_SUFFIXES = (".part", ".ytdl", ".tmp", ".temp")
 THROTTLING_HTTP_STATUSES = frozenset({403, 429})
+EXCLUDED_YTDLP_LIVE_STATUSES = frozenset(
+    {"is_live", "is_upcoming", "post_live"}
+)
 HTTP_STATUS_PATTERNS = (
     re.compile(r"\bHTTP(?:\s*Error)?\s+(403|429)\b", re.IGNORECASE),
     re.compile(r"\b(403)\s*:\s*Forbidden\b", re.IGNORECASE),
@@ -119,6 +124,31 @@ class _HttpStatusTracker:
         self.http_status = _extract_http_status_from_message(str(message))
 
 
+class _LiveStatusTracker:
+    def __init__(self) -> None:
+        self.live_status: str | None = None
+
+    def match_filter(
+        self,
+        info_dict: dict[str, Any],
+        *,
+        incomplete: bool,
+    ) -> str | None:
+        del incomplete
+        value = info_dict.get("live_status")
+        live_status = value.lower() if isinstance(value, str) else None
+        if live_status is None and info_dict.get("is_live") is True:
+            live_status = "is_live"
+        if live_status not in EXCLUDED_YTDLP_LIVE_STATUSES:
+            return None
+        self.live_status = live_status
+        video_id = info_dict.get("id") or "<unknown>"
+        return (
+            f"Skipping live video {video_id}: "
+            f"live_status={live_status}"
+        )
+
+
 def _track_yt_dlp_output(ydl: YoutubeDL, tracker: _HttpStatusTracker) -> None:
     for method_name in ("to_screen", "to_stderr", "to_stdout"):
         original = getattr(ydl, method_name)
@@ -187,22 +217,16 @@ def download(
 
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
-    existing_candidates = _find_final_download_candidates(destination, video_id)
-    if existing_candidates and not overwrite:
-        return _resolve_downloaded_file(destination, video_id)
     _remove_empty_final_download_candidates(destination, video_id)
-    if overwrite:
-        for candidate in destination.glob(f"vid_{video_id}.*"):
-            if candidate.is_file() and not any(
-                candidate.name.endswith(suffix) for suffix in TEMPORARY_SUFFIXES
-            ):
-                candidate.unlink()
 
+    live_status_tracker = _LiveStatusTracker()
     options: dict[str, Any] = {
         "format": DOWNLOAD_FORMAT,
         "merge_output_format": "mp4",
         "outtmpl": str(destination / f"vid_{video_id}.%(ext)s"),
         "noplaylist": True,
+        "overwrites": overwrite,
+        "match_filter": live_status_tracker.match_filter,
         "sleep_interval_requests": random.uniform(3.0, 5.0),
         "retries": 1,
         "fragment_retries": 0,
@@ -229,10 +253,18 @@ def download(
             _track_yt_dlp_output(ydl, status_tracker)
             exit_code = ydl.download([url])
     except DownloadError as exc:
+        if live_status_tracker.live_status is not None:
+            raise LiveVideoExcludedError(
+                video_id,
+                live_status_tracker.live_status,
+            ) from exc
         raise YouTubeDownloadError(
             str(exc),
             http_status=_extract_http_status(exc) or status_tracker.http_status,
         ) from exc
+
+    if live_status_tracker.live_status is not None:
+        raise LiveVideoExcludedError(video_id, live_status_tracker.live_status)
 
     if exit_code not in (0, None):
         raise YouTubeDownloadError(

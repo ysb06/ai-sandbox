@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import sys
 
 from ytcrawl.db import core, videos, youtube_search_runs
 from ytcrawl.search import youtube as youtube_search
@@ -14,6 +15,7 @@ class SnippetCrawlResult:
     video_records: tuple[videos.VideoRecord, ...]
     skipped: bool = False
     skipped_run_id: int | None = None
+    live_skipped: int = 0
 
 
 def crawl_youtube_snippet(
@@ -59,6 +61,18 @@ def crawl_youtube_snippet(
     response = youtube_search.fetch_search_response(
         args, api_key, page_token=page_token
     )
+    response, excluded_live_items = youtube_search.exclude_live_search_results(
+        response
+    )
+    for item in excluded_live_items:
+        item_id = item.get("id")
+        video_id = item_id.get("videoId") if isinstance(item_id, dict) else None
+        live_status = youtube_search.get_live_broadcast_content(item)
+        print(
+            f"Skipping YouTube search result {video_id or '<unknown>'}: "
+            f"liveBroadcastContent={live_status}.",
+            file=sys.stderr,
+        )
 
     with core.session_scope() as session:
         run = youtube_search_runs.create_search_run(
@@ -85,4 +99,5 @@ def crawl_youtube_snippet(
         run_id=run_id,
         item_count=item_count,
         video_records=video_records,
+        live_skipped=len(excluded_live_items),
     )

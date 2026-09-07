@@ -112,8 +112,19 @@ def crawl_youtube_channel(
                 video_ref_ids=[record.id for record in video_records],
             )
 
+    live_partition = details.partition_live_video_records(
+        download_records,
+        detail_result,
+    )
+    download_records = live_partition.downloadable
+    detail_live_skipped = download.record_live_video_exclusions(
+        live_partition.excluded,
+        status_by_video_id=live_partition.status_by_video_id,
+    )
+
     download_successes = 0
     download_failures = 0
+    download_live_skipped = detail_live_skipped
     download_user_declined = 0
     download_deferred = 0
     download_total_failures = 0
@@ -128,6 +139,7 @@ def crawl_youtube_channel(
         )
         download_successes = download_result.successes
         download_failures = download_result.failures
+        download_live_skipped += download_result.live_skipped
         download_user_declined = download_result.user_declined
         download_deferred = download_result.deferred
         download_total_failures = download_result.total_failures
@@ -144,6 +156,7 @@ def crawl_youtube_channel(
         f"embed code failed {embed_failures}; "
         f"downloaded {download_successes}, "
         f"download failed {download_failures}, "
+        f"download live skipped {download_live_skipped}, "
         f"download user declined {download_user_declined}, "
         f"download deferred {download_deferred}; "
         f"download attempted {download_attempted_unique} unique videos, "

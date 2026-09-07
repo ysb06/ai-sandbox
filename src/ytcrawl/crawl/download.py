@@ -12,6 +12,10 @@ from pathlib import Path
 from ytcrawl.config import ConfigError, get_config
 from ytcrawl.crawl.details import group_video_record_ids_by_video_id
 from ytcrawl.db import core, video_download_attempts, videos
+from ytcrawl.download.errors import (
+    LIVE_VIDEO_EXCLUDED_ERROR_TYPE,
+    LiveVideoExcludedError,
+)
 from ytcrawl.download.youtube import (
     DOWNLOADER_LABEL,
     DOWNLOAD_FORMAT,
@@ -20,7 +24,7 @@ from ytcrawl.download.youtube import (
 )
 
 DOWNLOAD_SLEEP_SECONDS_RANGE = (60.0, 180.0)
-DOWNLOAD_BATCH_SIZE = 5
+DOWNLOAD_BATCH_SIZE = 50
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 BOT_CHECK_ERROR_TYPE = "bot_check_required"
 HTTP_403_ERROR_TYPE = "http_403_forbidden"
@@ -39,6 +43,7 @@ ContinuationPrompt = Callable[[int, int], bool]
 class DownloadCrawlResult:
     successes: int = 0
     failures: int = 0
+    live_skipped: int = 0
     user_declined: int = 0
     deferred: int = 0
     attempted_unique_videos: int = 0
@@ -97,6 +102,9 @@ def _exception_http_status(exc: Exception) -> int | None:
 
 
 def classify_download_error(exc: Exception) -> str:
+    if isinstance(exc, LiveVideoExcludedError):
+        return LIVE_VIDEO_EXCLUDED_ERROR_TYPE
+
     http_status = _exception_http_status(exc)
     if http_status == 403:
         return HTTP_403_ERROR_TYPE
@@ -192,6 +200,39 @@ def record_unrequested_downloads(
     return recorded
 
 
+def record_live_video_exclusions(
+    video_records: tuple[videos.VideoRecord, ...],
+    *,
+    status_by_video_id: dict[str, str],
+) -> int:
+    if not video_records:
+        return 0
+    record_ids_by_video_id = group_video_record_ids_by_video_id(video_records)
+    recorded = 0
+    with core.session_scope() as session:
+        for video_id, record_ids in record_ids_by_video_id.items():
+            live_status = status_by_video_id.get(video_id, "live")
+            error_message = (
+                f"YouTube Data API reported liveBroadcastContent={live_status} "
+                f"for {video_id}; no media download request was made."
+            )
+            attempt_ids = create_download_attempts(session, record_ids)
+            mark_download_attempts_failed(
+                session,
+                attempt_ids,
+                error_type=LIVE_VIDEO_EXCLUDED_ERROR_TYPE,
+                error_message=error_message,
+            )
+            recorded += len(record_ids)
+            print(
+                f"Skipping live video {video_id}: "
+                f"liveBroadcastContent={live_status}; "
+                "no media download request was made.",
+                file=sys.stderr,
+            )
+    return recorded
+
+
 def prompt_for_next_batch(
     processed_unique_videos: int,
     remaining_unique_videos: int,
@@ -236,6 +277,7 @@ def crawl_youtube_videos(
 
     failures = missing_video_id_count
     successes = 0
+    live_skipped = 0
     user_declined = 0
     deferred = 0
     attempted_unique_videos = 0
@@ -293,6 +335,14 @@ def crawl_youtube_videos(
                     error_type=error_type,
                     error_message=error_message,
                 )
+            if error_type == LIVE_VIDEO_EXCLUDED_ERROR_TYPE:
+                live_skipped += len(record_ids)
+                print(
+                    f"Skipping live video download for {video_id}: {exc}",
+                    file=sys.stderr,
+                )
+                continue
+
             failures += len(record_ids)
             print(f"Failed to download {video_id}: {exc}", file=sys.stderr)
             if error_type in SAFETY_STOP_ERROR_TYPES:
@@ -336,6 +386,7 @@ def crawl_youtube_videos(
     return DownloadCrawlResult(
         successes=successes,
         failures=failures,
+        live_skipped=live_skipped,
         user_declined=user_declined,
         deferred=deferred,
         attempted_unique_videos=attempted_unique_videos,
@@ -383,6 +434,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     print(
         f"Downloaded {result.successes} videos, failed {result.failures}, "
+        f"live skipped {result.live_skipped}, "
         f"user declined {result.user_declined}, deferred {result.deferred}; "
         f"attempted {result.attempted_unique_videos} unique videos, "
         f"remaining {result.remaining_unique_videos} unique videos."

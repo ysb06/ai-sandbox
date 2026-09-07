@@ -10,6 +10,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from ytcrawl.db.core import Base
+from ytcrawl.db.video_download_attempts import VideoDownloadAttempt
+from ytcrawl.download.errors import LIVE_VIDEO_EXCLUDED_ERROR_TYPE
 
 
 @dataclass(frozen=True)
@@ -248,13 +250,35 @@ def _missing_text(column):
     return or_(column.is_(None), column == "")
 
 
+def _not_live_video_excluded():
+    latest_completed_error_type = (
+        select(VideoDownloadAttempt.error_type)
+        .where(
+            VideoDownloadAttempt.video_ref_id == Video.id,
+            VideoDownloadAttempt.finished_at.is_not(None),
+        )
+        .order_by(VideoDownloadAttempt.id.desc())
+        .limit(1)
+        .correlate(Video)
+        .scalar_subquery()
+    )
+    return or_(
+        latest_completed_error_type.is_(None),
+        latest_completed_error_type != LIVE_VIDEO_EXCLUDED_ERROR_TYPE,
+    )
+
+
 def find_video_records_needing_download(
     session: Session,
 ) -> tuple[VideoRecord, ...]:
     video_rows = tuple(
         session.scalars(
             select(Video)
-            .where(_missing_text(Video.path), _missing_text(Video.embed_code))
+            .where(
+                _missing_text(Video.path),
+                _missing_text(Video.embed_code),
+                _not_live_video_excluded(),
+            )
             .order_by(Video.id)
         )
     )
@@ -273,6 +297,7 @@ def find_video_records_for_search_needing_download(
                 Video.search_id == search_id,
                 _missing_text(Video.path),
                 _missing_text(Video.embed_code),
+                _not_live_video_excluded(),
             )
             .order_by(Video.id)
         )
@@ -294,6 +319,7 @@ def find_video_records_by_ids_needing_download(
                 Video.id.in_(video_ref_ids),
                 _missing_text(Video.path),
                 _missing_text(Video.embed_code),
+                _not_live_video_excluded(),
             )
             .order_by(Video.id)
         )

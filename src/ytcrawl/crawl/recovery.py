@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from ytcrawl.config import ConfigError, get_config
 from ytcrawl.crawl.download import crawl_youtube_videos
 from ytcrawl.db import core, video_download_attempts, videos
+from ytcrawl.download.errors import LIVE_VIDEO_EXCLUDED_ERROR_TYPE
 
 
 def find_failed_video_records(
@@ -36,6 +37,7 @@ def find_failed_video_records(
             attempt.finished_at.is_not(None),
             attempt.error_type.is_not(None),
             attempt.error_type != "",
+            attempt.error_type != LIVE_VIDEO_EXCLUDED_ERROR_TYPE,
         )
         .order_by(video.id)
     ).all()
@@ -81,6 +83,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     print(
         f"Recovered {result.successes} videos, failed {result.failures}, "
+        f"live skipped {result.live_skipped}, "
         f"user declined {result.user_declined}, deferred {result.deferred}; "
         f"attempted {result.attempted_unique_videos} unique videos, "
         f"remaining {result.remaining_unique_videos} unique videos."

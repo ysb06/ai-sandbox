@@ -7,6 +7,8 @@ from typing import Any
 from ytcrawl.db import core, videos, videos_detail
 from ytcrawl.search import youtube_detail
 
+EXCLUDED_LIVE_BROADCAST_CONTENT = frozenset({"live", "upcoming"})
+
 
 @dataclass(frozen=True)
 class DetailCrawlResult:
@@ -14,6 +16,52 @@ class DetailCrawlResult:
     detail_items_by_video_id: dict[str, dict[str, Any]]
     saved: int = 0
     failures: int = 0
+
+
+@dataclass(frozen=True)
+class LiveVideoPartition:
+    downloadable: tuple[videos.VideoRecord, ...]
+    excluded: tuple[videos.VideoRecord, ...]
+    status_by_video_id: dict[str, str]
+
+
+def get_detail_live_broadcast_content(
+    item: dict[str, Any] | None,
+) -> str | None:
+    if not isinstance(item, dict):
+        return None
+    snippet = item.get("snippet")
+    if not isinstance(snippet, dict):
+        return None
+    value = snippet.get("liveBroadcastContent")
+    return value.lower() if isinstance(value, str) else None
+
+
+def partition_live_video_records(
+    video_records: tuple[videos.VideoRecord, ...],
+    detail_result: DetailCrawlResult,
+) -> LiveVideoPartition:
+    status_by_video_id = {
+        video_id: live_status
+        for video_id, item in detail_result.detail_items_by_video_id.items()
+        if (
+            live_status := get_detail_live_broadcast_content(item)
+        ) in EXCLUDED_LIVE_BROADCAST_CONTENT
+    }
+    downloadable: list[videos.VideoRecord] = []
+    excluded: list[videos.VideoRecord] = []
+    for record in video_records:
+        target = (
+            excluded
+            if record.video_id in status_by_video_id
+            else downloadable
+        )
+        target.append(record)
+    return LiveVideoPartition(
+        downloadable=tuple(downloadable),
+        excluded=tuple(excluded),
+        status_by_video_id=status_by_video_id,
+    )
 
 
 def group_video_record_ids_by_video_id(
