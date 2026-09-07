@@ -408,39 +408,3 @@ def crawl_missing_youtube_videos(
         video_records,
         continuation_prompt=continuation_prompt,
     )
-
-
-def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    return argparse.ArgumentParser(
-        prog="ytcrawl.crawl.download",
-        description="Download stored YouTube videos that have no embed code or local path.",
-    ).parse_args(argv)
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    parse_args(argv)
-    try:
-        config = get_config()
-    except ConfigError as exc:
-        print(f"Configuration error: {exc}", file=sys.stderr)
-        return 2
-
-    core.configure(config.db_url)
-    core.create_all()
-
-    result = crawl_missing_youtube_videos(
-        config.media_root,
-        continuation_prompt=prompt_for_next_batch,
-    )
-    print(
-        f"Downloaded {result.successes} videos, failed {result.failures}, "
-        f"live skipped {result.live_skipped}, "
-        f"user declined {result.user_declined}, deferred {result.deferred}; "
-        f"attempted {result.attempted_unique_videos} unique videos, "
-        f"remaining {result.remaining_unique_videos} unique videos."
-    )
-    return 1 if (result.total_failures or result.halt_error_type) else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
