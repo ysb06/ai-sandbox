@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import random
 import re
 import sys
@@ -9,7 +8,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from ytcrawl.config import ConfigError, get_config
 from ytcrawl.crawl.details import group_video_record_ids_by_video_id
 from ytcrawl.db import core, video_download_attempts, videos
 from ytcrawl.download.errors import (
@@ -393,18 +391,4 @@ def crawl_youtube_videos(
         remaining_unique_videos=remaining_unique_videos,
         halt_error_type=halt_error_type,
         batch_limit_reached=batch_limit_reached,
-    )
-
-
-def crawl_missing_youtube_videos(
-    output_dir: str | Path,
-    *,
-    continuation_prompt: ContinuationPrompt | None = None,
-) -> DownloadCrawlResult:
-    with core.session_scope() as session:
-        video_records = videos.find_video_records_needing_download(session)
-    return crawl_youtube_videos(
-        output_dir,
-        video_records,
-        continuation_prompt=continuation_prompt,
     )
