@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -14,10 +13,8 @@ from ytcrawl.statistics._common import (
     format_decimal,
     format_duration,
     format_size,
-    resolve_media_path,
 )
-
-_DECISIVE_STATUSES = frozenset({"accepted", "rejected"})
+from ytcrawl.statistics._consensus import collect_review_consensus
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,14 +36,6 @@ class AcceptanceStatistics:
     conflicting_durations: int
 
 
-@dataclass(frozen=True, slots=True)
-class _VideoRow:
-    video_ref_id: int
-    logical_key: tuple[str, object]
-    stored_path: str | None
-    duration: object
-
-
 def collect_acceptance_statistics(
     db_path: str | Path,
     media_root: str | Path,
@@ -54,46 +43,17 @@ def collect_acceptance_statistics(
 ) -> AcceptanceStatistics:
     """Read consensus statistics without modifying the SQLite database."""
     threshold = _validate_accept_ratio(accept_ratio)
-    selected_db_path = Path(db_path).expanduser().resolve()
     selected_media_root = Path(media_root).expanduser().resolve()
-
-    raw_video_rows, review_rows = _read_acceptance_data(selected_db_path)
-    video_rows = tuple(
-        _to_video_row(row, selected_media_root) for row in raw_video_rows
-    )
-    logical_key_by_video_ref = {
-        row.video_ref_id: row.logical_key for row in video_rows
-    }
-
-    latest_decisions: dict[tuple[tuple[str, object], str], str] = {}
-    duplicate_decisions = 0
-    for _review_id, video_ref_id, username, status, _updated_at in review_rows:
-        logical_key = logical_key_by_video_ref.get(video_ref_id)
-        if logical_key is None:
-            continue
-        decision_key = (logical_key, username)
-        if decision_key in latest_decisions:
-            duplicate_decisions += 1
-        latest_decisions[decision_key] = status
-
-    decision_counts: dict[tuple[str, object], list[int]] = {}
-    for (logical_key, _username), status in latest_decisions.items():
-        if status not in _DECISIVE_STATUSES:
-            continue
-        counts = decision_counts.setdefault(logical_key, [0, 0])
-        if status == "accepted":
-            counts[0] += 1
-        else:
-            counts[1] += 1
+    consensus = collect_review_consensus(db_path, selected_media_root)
 
     accepted_keys = {
         logical_key
-        for logical_key, (accepted, rejected) in decision_counts.items()
-        if Decimal(accepted) / Decimal(accepted + rejected) >= threshold
+        for logical_key, counts in consensus.decision_counts.items()
+        if Decimal(counts.accepted) / Decimal(counts.decisive) >= threshold
     }
     accepted_references = (
         (row.stored_path, row.duration)
-        for row in video_rows
+        for row in consensus.video_rows
         if row.logical_key in accepted_keys and row.stored_path is not None
     )
     aggregate = collect_media_aggregate(
@@ -103,13 +63,15 @@ def collect_acceptance_statistics(
 
     return AcceptanceStatistics(
         accept_ratio_threshold=threshold,
-        decisive_reviewed_videos=len(decision_counts),
+        decisive_reviewed_videos=len(consensus.decision_counts),
         accepted_logical_videos=len(accepted_keys),
         accepted_physical_video_files=aggregate.existing_files,
         total_size_bytes=aggregate.total_size_bytes,
         total_duration_seconds=aggregate.total_duration_seconds,
         duration_files=aggregate.duration_files,
-        duplicate_reviewer_decisions_collapsed=duplicate_decisions,
+        duplicate_reviewer_decisions_collapsed=(
+            consensus.duplicate_reviewer_decisions_collapsed
+        ),
         duplicate_file_references_ignored=aggregate.duplicate_references_ignored,
         missing_files=aggregate.missing_files,
         missing_durations=aggregate.missing_durations,
@@ -206,77 +168,6 @@ def _parse_accept_ratio(value: str) -> Decimal:
         raise argparse.ArgumentTypeError(
             "accept ratio must be a decimal between 0.0 and 1.0"
         ) from exc
-
-
-def _to_video_row(
-    row: tuple[int, object, object, object],
-    media_root: Path,
-) -> _VideoRow:
-    video_ref_id, raw_video_id, raw_stored_path, duration = row
-    video_id = (
-        raw_video_id
-        if isinstance(raw_video_id, str) and raw_video_id.strip()
-        else ""
-    )
-    stored_path = (
-        raw_stored_path
-        if isinstance(raw_stored_path, str) and raw_stored_path.strip()
-        else None
-    )
-    if video_id:
-        logical_key: tuple[str, object] = ("video_id", video_id)
-    elif stored_path is not None:
-        logical_key = (
-            "path",
-            resolve_media_path(media_root, stored_path),
-        )
-    else:
-        logical_key = ("video_ref_id", video_ref_id)
-    return _VideoRow(
-        video_ref_id=video_ref_id,
-        logical_key=logical_key,
-        stored_path=stored_path,
-        duration=duration,
-    )
-
-
-def _read_acceptance_data(
-    db_path: Path,
-) -> tuple[
-    tuple[tuple[int, object, object, object], ...],
-    tuple[tuple[int, int, str, str, object], ...],
-]:
-    database_uri = f"{db_path.as_uri()}?mode=ro"
-    with sqlite3.connect(database_uri, uri=True) as connection:
-        connection.execute("BEGIN")
-        video_rows = connection.execute(
-            """
-            SELECT
-                videos.id,
-                videos.video_id,
-                videos.path,
-                videos_detail.duration
-            FROM videos
-            LEFT JOIN videos_detail
-                ON videos_detail.video_ref_id = videos.id
-            ORDER BY videos.id
-            """
-        ).fetchall()
-        review_rows = connection.execute(
-            """
-            SELECT id, video_ref_id, username, status, updated_at
-            FROM video_reviews
-            ORDER BY updated_at, id
-            """
-        ).fetchall()
-
-    return (
-        tuple((int(row[0]), row[1], row[2], row[3]) for row in video_rows),
-        tuple(
-            (int(row[0]), int(row[1]), str(row[2]), str(row[3]), row[4])
-            for row in review_rows
-        ),
-    )
 
 
 if __name__ == "__main__":

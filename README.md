@@ -35,7 +35,16 @@ WhisperX 화자 분리에는 실행 환경의 `HF_TOKEN`이 필요합니다.
 | `pdm run python -m ytcrawl.download --video-id VIDEO_ID` | 영상 하나를 설정된 미디어 디렉터리에 다운로드합니다. |
 | `pdm run python -m ytcrawl.statistics.stats` | DB가 참조하는 완료 영상의 개수, 용량, 재생 시간을 집계합니다. |
 | `pdm run python -m ytcrawl.statistics.acceptance --accept-ratio 0.5` | 검수자 승인 비율 기준을 만족한 영상의 통계를 집계합니다. |
+| `pdm run python -m ytcrawl.cleanup --reject-ratio 0.5` | Reject 비율 기준을 만족한 로컬 영상 파일을 즉시 삭제합니다. 삭제 없이 대상을 확인하려면 `--dry-run`을 추가합니다. |
 | `pdm run python -m ytcrawl.sync push all` | 설정된 SSH 피어와 `push` 또는 `pull` 방향으로 `db`, `media`, `all` 중 하나를 동기화합니다. DB 동기화는 목적지 DB를 교체하므로 주의해야 합니다. |
+
+`ytcrawl.cleanup`은 DB와 저장된 `path`를 변경하지 않으므로 삭제된 파일은
+`ytcrawl.crawl.recovery --download-missing`으로 다시 다운로드할 수 있습니다.
+Reject 비율은 각 논리 영상에 대한 검수자별 최신 확정 판정만 사용해
+`rejected / (accepted + rejected)`로 계산하며, Reject가 한 건 이상인 경우에만
+대상이 됩니다. `pending`과 `needs_review`는 계산에서 제외됩니다.
+미디어 동기화는 파일 삭제를 전파하지 않으므로 서버 용량도 줄이려면 코드를
+배포한 뒤 서버에서 같은 cleanup 명령을 별도로 실행해야 합니다.
 
 `ytcrawl.sync_remote`는 `ytcrawl.sync`가 SSH 피어에서 호출하는 내부 헬퍼이므로
 일반적으로 직접 실행하지 않습니다. 각 명령의 상세 옵션은 `--help`로 확인할 수
