@@ -33,10 +33,44 @@ WhisperX 화자 분리에는 실행 환경의 `HF_TOKEN`이 필요합니다.
 | `pdm run python -m ytcrawl.search.youtube_channel --handle @HANDLE` | 핸들 또는 `--name`으로 채널 ID 후보를 조회합니다. |
 | `pdm run python -m ytcrawl.search.youtube_detail --video-ids VIDEO_ID --output details.json` | 하나 이상의 영상 상세 응답을 JSON으로 저장합니다. |
 | `pdm run python -m ytcrawl.download --video-id VIDEO_ID` | 영상 하나를 설정된 미디어 디렉터리에 다운로드합니다. |
+| `pdm run python -m ytcrawl.crawl.recovery --download-missing` | DB에 등록된 영상 중 로컬 파일이 없거나 비정상인 항목을 재다운로드합니다. `--audit` 단독 실행으로 상태만 점검할 수 있습니다. |
 | `pdm run python -m ytcrawl.statistics.stats` | DB가 참조하는 완료 영상의 개수, 용량, 재생 시간을 집계합니다. |
 | `pdm run python -m ytcrawl.statistics.acceptance --accept-ratio 0.5` | 검수자 승인 비율 기준을 만족한 영상의 통계를 집계합니다. |
 | `pdm run python -m ytcrawl.cleanup --reject-ratio 0.5` | Reject 비율 기준을 만족한 로컬 영상 파일을 즉시 삭제합니다. 삭제 없이 대상을 확인하려면 `--dry-run`을 추가합니다. |
 | `pdm run python -m ytcrawl.sync push all` | 설정된 SSH 피어와 `push` 또는 `pull` 방향으로 `db`, `media`, `all` 중 하나를 동기화합니다. DB 동기화는 목적지 DB를 교체하므로 주의해야 합니다. |
+
+직접 실행한 `yt-dlp`의 쿠키 옵션은 프로젝트 CLI에 자동으로 전달되지 않습니다.
+영상 다운로드가 포함된 `ytcrawl`, `ytcrawl.crawl.youtube.channel.main`,
+`ytcrawl.download`, `ytcrawl.crawl.recovery --download-missing`에서 공통으로
+`--cookies-from-browser`를 사용할 수 있습니다. 검색/상세 조회 전용 CLI의
+YouTube Data API 요청에는 이 옵션이 적용되지 않습니다.
+
+특정 Chrome 프로필을 쓰려면 해당 프로필 창에서 `chrome://version`을 열어
+**프로필 경로(Profile Path)**를 확인합니다. 화면에 표시되는 사용자 이름이 아니라
+경로의 마지막 폴더명(예: `Default`, `Profile 1`) 또는 프로필 전체 경로를 사용합니다.
+프로필 경로 확인 방법은 [Chromium 공식 문서](https://chromium.googlesource.com/chromium/src/+/master/docs/user_data_dir.md#current-location)를 참고하세요.
+진단이 성공한 컴퓨터와 OS 사용자 환경에서 실행하며, 아래 `Profile 1`은 예시입니다.
+
+```bash
+pdm run python -m ytcrawl.crawl.recovery --download-missing \
+  --cookies-from-browser "chrome:Profile 1"
+```
+
+다른 다운로드 CLI에도 같은 옵션을 추가합니다. 예를 들어 검색 수집은 다음과 같습니다.
+
+```bash
+pdm run python -m ytcrawl --preset interview \
+  --cookies-from-browser "chrome:Profile 1"
+```
+
+[yt-dlp 형식](https://github.com/yt-dlp/yt-dlp#filesystem-options)인
+`BROWSER[+KEYRING][:PROFILE][::CONTAINER]`를 지원합니다.
+`chrome:Default`는 Default 폴더를 명시하고, `chrome`만 지정하면 yt-dlp가
+프로필을 자동 선택하므로 특정 프로필 사용이 보장되지 않습니다.
+프로필 경로에 공백이 있으면 옵션 값 전체를 따옴표로 감싸세요.
+옵션은 실행별로 지정하며, 프로젝트 설정에 저장하거나 쿠키 파일을 내보내지 않습니다.
+생략하면 브라우저 쿠키를 읽지 않으며, 봇 확인 오류가 다시 발생하면 기존 안전 중단이 적용됩니다.
+`--simulate` 성공은 정보 추출 확인이며 실제 미디어 다운로드 성공을 보장하지는 않습니다.
 
 `ytcrawl.cleanup`은 DB와 저장된 `path`를 변경하지 않으므로 삭제된 파일은
 `ytcrawl.crawl.recovery --download-missing`으로 다시 다운로드할 수 있습니다.

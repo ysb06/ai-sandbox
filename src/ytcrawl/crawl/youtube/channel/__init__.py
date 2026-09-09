@@ -17,6 +17,7 @@ def crawl_youtube_channel(
     published_after: str | None = None,
     published_before: str | None = None,
     always_download: bool = False,
+    cookies_from_browser: str | None = None,
 ) -> int:
     lower_bound, upper_bound = youtube_uploads.parse_published_range(
         published_after,
@@ -136,6 +137,7 @@ def crawl_youtube_channel(
             str(output_dir),
             download_records,
             continuation_prompt=download.prompt_for_next_batch,
+            cookies_from_browser=cookies_from_browser,
         )
         download_successes = download_result.successes
         download_failures = download_result.failures

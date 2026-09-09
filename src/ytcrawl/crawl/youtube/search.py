@@ -70,6 +70,7 @@ def crawl_youtube(
             selected_output_dir,
             download_records,
             continuation_prompt=download.prompt_for_next_batch,
+            cookies_from_browser=getattr(args, "cookies_from_browser", None),
         )
         download_successes = download_result.successes
         download_failures = download_result.failures

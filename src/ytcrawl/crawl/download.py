@@ -21,7 +21,7 @@ from ytcrawl.download.youtube import (
     download as download_youtube,
 )
 
-DOWNLOAD_SLEEP_SECONDS_RANGE = (60.0, 180.0)
+DOWNLOAD_SLEEP_SECONDS_RANGE = (60.0, 120.0)
 DOWNLOAD_BATCH_SIZE = 50
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 BOT_CHECK_ERROR_TYPE = "bot_check_required"
@@ -257,6 +257,7 @@ def crawl_youtube_videos(
     *,
     batch_size: int = DOWNLOAD_BATCH_SIZE,
     continuation_prompt: ContinuationPrompt | None = None,
+    cookies_from_browser: str | None = None,
 ) -> DownloadCrawlResult:
     if batch_size <= 0:
         raise ValueError("batch_size must be greater than zero")
@@ -320,7 +321,12 @@ def crawl_youtube_videos(
 
         try:
             downloaded_path = Path(
-                download_youtube(video_id, output_root, overwrite=False)
+                download_youtube(
+                    video_id,
+                    output_root,
+                    overwrite=False,
+                    cookies_from_browser=cookies_from_browser,
+                )
             ).resolve()
             stored_path = downloaded_path.relative_to(output_root).as_posix()
         except Exception as exc:  # noqa: BLE001 - classify before deciding whether to stop.

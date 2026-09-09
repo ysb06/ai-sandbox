@@ -3,6 +3,7 @@ import sys
 from collections.abc import Sequence
 
 from ytcrawl.config import ConfigError, get_config
+from ytcrawl.download.cookies import add_browser_cookie_argument
 from ytcrawl.download.youtube import download
 
 
@@ -12,6 +13,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         description="Download one YouTube video.",
     )
     parser.add_argument("--video-id", required=True, help="YouTube video ID")
+    add_browser_cookie_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -26,7 +28,11 @@ def main(
         return 2
 
     try:
-        result_path = download(args.video_id, config.media_root)
+        result_path = download(
+            args.video_id,
+            config.media_root,
+            cookies_from_browser=args.cookies_from_browser,
+        )
     except Exception as exc:  # noqa: BLE001 - show command-line failure clearly.
         print(f"Failed to download {args.video_id}: {exc}", file=sys.stderr)
         return 1

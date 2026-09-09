@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from ytcrawl.config import ConfigError, get_config
 from ytcrawl.crawl.youtube.channel import crawl_youtube_channel
+from ytcrawl.download.cookies import add_browser_cookie_argument
 
 # CSPAN_CHANNEL_ID = "UCb--64Gl51jIEVE-GLDAVTg"
 # SPBSTV_CHANNEL_ID = "UCbLhiGCUNY0ufWIATLCnBrw"
@@ -31,6 +32,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "Download every video collected on this page regardless of embed availability. Existing local files are reused."
         ),
     )
+    add_browser_cookie_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -50,6 +52,7 @@ def run_channel_crawl(
         published_after=args.published_after,
         published_before=args.published_before,
         always_download=always_download,
+        cookies_from_browser=getattr(args, "cookies_from_browser", None),
     )
 
 

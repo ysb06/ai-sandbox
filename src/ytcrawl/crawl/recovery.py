@@ -30,6 +30,7 @@ from ytcrawl.db import (
     videos,
     videos_detail,
 )
+from ytcrawl.download.cookies import add_browser_cookie_argument
 
 RECOVERY_BATCH_SIZE = DOWNLOAD_BATCH_SIZE
 
@@ -951,6 +952,8 @@ def find_missing_file_video_records(
 
 def download_missing_videos(
     media_root: str | Path,
+    *,
+    cookies_from_browser: str | None = None,
 ) -> DownloadCrawlResult:
     with core.session_scope() as session:
         video_records = find_missing_file_video_records(session, media_root)
@@ -961,6 +964,7 @@ def download_missing_videos(
         video_records,
         batch_size=RECOVERY_BATCH_SIZE,
         continuation_prompt=None,
+        cookies_from_browser=cookies_from_browser,
     )
 
 
@@ -1416,7 +1420,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Report duplicate, path, attempt, and unreferenced-media findings.",
     )
-    return parser.parse_args(argv)
+    add_browser_cookie_argument(parser)
+    args = parser.parse_args(argv)
+    if args.cookies_from_browser is not None and not args.download_missing:
+        parser.error("--cookies-from-browser requires --download-missing")
+    return args
 
 
 def _print_download_summary(result: DownloadCrawlResult) -> None:
@@ -1513,7 +1521,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.download_missing:
         try:
-            download_result = download_missing_videos(config.media_root)
+            download_result = download_missing_videos(
+                config.media_root,
+                cookies_from_browser=args.cookies_from_browser,
+            )
         except RecoveryError as exc:
             print(f"Recovery error: {exc}", file=sys.stderr)
             return 1

@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from ytcrawl.config import ConfigError, get_config
 from ytcrawl.crawl.youtube import crawl_youtube
+from ytcrawl.download.cookies import add_browser_cookie_argument
 from ytcrawl.search.youtube import PRESET_QUERIES
 
 
@@ -48,6 +49,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
 
+    add_browser_cookie_argument(parser)
     return parser.parse_args(argv)
 
 

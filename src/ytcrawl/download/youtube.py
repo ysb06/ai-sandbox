@@ -10,6 +10,7 @@ from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError
 from yt_dlp.version import __version__ as YT_DLP_VERSION
 
+from ytcrawl.download.cookies import parse_browser_cookie_spec
 from ytcrawl.download.errors import LiveVideoExcludedError
 
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -211,10 +212,17 @@ def download(
     video_id: str,
     output_dir: str | Path,
     overwrite: bool = False,
+    *,
+    cookies_from_browser: str | None = None,
 ) -> Path:
     if not VIDEO_ID_PATTERN.fullmatch(video_id):
         raise ValueError(f"Invalid YouTube video_id: {video_id!r}")
 
+    browser_cookie_spec = (
+        parse_browser_cookie_spec(cookies_from_browser)
+        if cookies_from_browser is not None
+        else None
+    )
     destination = Path(output_dir)
     destination.mkdir(parents=True, exist_ok=True)
     _remove_empty_final_download_candidates(destination, video_id)
@@ -245,6 +253,8 @@ def download(
             },
         },
     }
+    if browser_cookie_spec is not None:
+        options["cookiesfrombrowser"] = browser_cookie_spec
     url = YOUTUBE_WATCH_URL.format(video_id=video_id)
     status_tracker = _HttpStatusTracker()
 
