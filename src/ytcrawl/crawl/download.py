@@ -48,6 +48,9 @@ class DownloadCrawlResult:
     remaining_unique_videos: int = 0
     halt_error_type: str | None = None
     batch_limit_reached: bool = False
+    successful_unique_videos: int = 0
+    failed_unique_videos: int = 0
+    live_skipped_unique_videos: int = 0
 
     @property
     def total_failures(self) -> int:
@@ -275,6 +278,9 @@ def crawl_youtube_videos(
             )
 
     failures = missing_video_id_count
+    successful_unique = 0
+    failed_unique = 0
+    live_unique = 0
     successes = 0
     live_skipped = 0
     user_declined = 0
@@ -340,6 +346,7 @@ def crawl_youtube_videos(
                     error_message=error_message,
                 )
             if error_type == LIVE_VIDEO_EXCLUDED_ERROR_TYPE:
+                live_unique += 1
                 live_skipped += len(record_ids)
                 print(
                     f"Skipping live video download for {video_id}: {exc}",
@@ -348,6 +355,7 @@ def crawl_youtube_videos(
                 continue
 
             failures += len(record_ids)
+            failed_unique += 1
             print(f"Failed to download {video_id}: {exc}", file=sys.stderr)
             if error_type in SAFETY_STOP_ERROR_TYPES:
                 remaining_items = video_items[item_index + 1 :]
@@ -386,8 +394,12 @@ def crawl_youtube_videos(
                     session, id=video_pk, path=stored_path
                 )
         successes += len(record_ids)
+        successful_unique += 1
 
     return DownloadCrawlResult(
+        successful_unique_videos=successful_unique,
+        failed_unique_videos=failed_unique,
+        live_skipped_unique_videos=live_unique,
         successes=successes,
         failures=failures,
         live_skipped=live_skipped,

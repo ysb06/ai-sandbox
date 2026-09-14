@@ -1,4 +1,4 @@
-const REVIEWED_STATUSES = ["accepted", "rejected", "needs_review"];
+const REVIEWED_STATUSES = ["accepted", "rejected"];
 const SEGMENT_PREVIEW_INTERVAL_MS = 100;
 const YOUTUBE_IFRAME_API_URL = "https://www.youtube.com/iframe_api";
 const YOUTUBE_IFRAME_API_TIMEOUT_MS = 15000;

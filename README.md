@@ -27,6 +27,27 @@ WhisperX 화자 분리에는 실행 환경의 `HF_TOKEN`이 필요합니다.
 
 ## 보조 CLI
 
+JSON 목록 다운로드는 다음과 같이 실행합니다.
+
+```bash
+pdm run python -m ytcrawl.crawl.youtube.custom \
+  --json inputs/download_candidates_2500_20260911T065017Z.json
+```
+
+입력은 `video_id`가 있는 객체 배열입니다. 전체 입력을 검증한 뒤 중복 ID를
+제거하고, 검색/상세 API 호출이나 검색 기록 생성 없이 JSON 메타데이터를 저장합니다.
+DB와 영상 경로는 `DATA_ROOT`를 사용하며 API 키는 필요하지 않습니다.
+50개마다 확인하지 않고 전체 목록을 순차 처리합니다. 기존 60~120초 대기와
+라이브 제외, 403/429/봇 확인 오류 시 중단은 유지됩니다. 일반 다운로드 실패는
+기록하고 다음 영상으로 진행합니다.
+
+같은 명령을 재실행하면 완료 파일을 재사용하고 누락/빈 파일을 다운로드합니다.
+기존 영상 행과 리뷰는 보존하며 새로운 영상은 검색 연결 없이 Review에 표시됩니다.
+기존 DB의 검색 ID 필수 제약은 최초 실행 시 `Backup`에 DB를 백업한 뒤 변환합니다.
+원격 Review에도 nullable 검색 ID를 지원하는 코드를 배포해야 합니다.
+종료 요약은 고유 영상 기준이며 실패 또는 미처리가 있으면 종료 코드 1,
+입력/설정 오류는 2입니다. 빈 목록은 저장 없이 종료합니다.
+
 | 명령 | 설명 |
 | --- | --- |
 | `pdm run python -m ytcrawl.search --preset PRESET --output search.json` | YouTube `search.list` 원본 응답을 JSON으로 저장합니다. |
@@ -41,7 +62,7 @@ WhisperX 화자 분리에는 실행 환경의 `HF_TOKEN`이 필요합니다.
 
 직접 실행한 `yt-dlp`의 쿠키 옵션은 프로젝트 CLI에 자동으로 전달되지 않습니다.
 영상 다운로드가 포함된 `ytcrawl`, `ytcrawl.crawl.youtube.channel.main`,
-`ytcrawl.download`, `ytcrawl.crawl.recovery --download-missing`에서 공통으로
+`ytcrawl.download`, `ytcrawl.crawl.youtube.custom`, `ytcrawl.crawl.recovery --download-missing`에서 공통으로
 `--cookies-from-browser`를 사용할 수 있습니다. 검색/상세 조회 전용 CLI의
 YouTube Data API 요청에는 이 옵션이 적용되지 않습니다.
 
