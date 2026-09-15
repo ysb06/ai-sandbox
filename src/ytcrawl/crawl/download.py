@@ -21,7 +21,7 @@ from ytcrawl.download.youtube import (
     download as download_youtube,
 )
 
-DOWNLOAD_SLEEP_SECONDS_RANGE = (5.0, 30.0)
+DOWNLOAD_SLEEP_SECONDS_RANGE = (5.0, 15.0)
 DOWNLOAD_BATCH_SIZE = 50
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 BOT_CHECK_ERROR_TYPE = "bot_check_required"
