@@ -62,9 +62,9 @@ def get_video_detail(
             session,
             video_ref_id=video_ref_id,
         )
-        search_run = youtube_search_runs.find_search_run_by_id(
-            session,
-            search_id=video.search_id,
+        search_run = (
+            youtube_search_runs.find_search_run_by_id(session, search_id=video.search_id)
+            if video.search_id is not None else None
         )
 
         video_info = _video_info(video)
@@ -221,7 +221,6 @@ def _video_summary(
         reviewed=review_status in (
             video_reviews.REVIEW_STATUS_ACCEPTED,
             video_reviews.REVIEW_STATUS_REJECTED,
-            video_reviews.REVIEW_STATUS_NEEDS_REVIEW,
         ),
     )
 

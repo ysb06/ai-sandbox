@@ -24,9 +24,9 @@ class Video(Base):
     __tablename__ = "videos"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    search_id: Mapped[int] = mapped_column(
+    search_id: Mapped[int | None] = mapped_column(
         ForeignKey("youtube_search_runs.id"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     kind: Mapped[str | None] = mapped_column(String(128), nullable=True)

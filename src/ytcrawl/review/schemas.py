@@ -29,7 +29,7 @@ class VideoListResponse(BaseModel):
 
 class VideoInfo(BaseModel):
     id: int
-    search_id: int
+    search_id: int | None
     kind: str | None
     etag: str | None
     video_id: str | None
