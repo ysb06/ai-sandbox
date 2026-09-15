@@ -1,3 +1,5 @@
+"""YouTube Download 모듈. yt-dlp를 사용해 하나의 영상 다운로드 기능을 제공하며, 다른 기능들이 추가되면 안 됨."""
+
 import random
 from pathlib import Path
 from typing import Any
@@ -65,8 +67,11 @@ def download(
         },
     }
     url = YOUTUBE_WATCH_URL.format(video_id=video_id)
-    with YoutubeDL(options) as ydl:
-        exit_code = ydl.download([url])
+    try:
+        with YoutubeDL(options) as ydl:
+            exit_code = ydl.download([url])
+    except DownloadError as exc:
+        raise YouTubeDownloadError(str(exc)) from exc
 
     if exit_code not in (0, None):
         raise YouTubeDownloadError(f"yt-dlp failed with exit code {exit_code}.")
