@@ -44,6 +44,7 @@ def create_all() -> None:
         video_download_attempts,
         video_review_segments,
         video_reviews,
+        video_vtt_analysis,
         videos,
         videos_detail,
         youtube_search_runs,

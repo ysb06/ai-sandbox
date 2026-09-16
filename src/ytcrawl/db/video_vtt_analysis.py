@@ -1,11 +1,27 @@
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
-from sqlalchemy import ForeignKey, Integer, String, Text, JSON
-from sqlalchemy.orm import Mapped, mapped_column
+
+from sqlalchemy import ForeignKey, Integer, JSON, Text, UniqueConstraint, select
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from ytcrawl.db.core import Base
+from ytcrawl.db.videos import Video
+
+
+@dataclass(frozen=True)
+class VideoAnalysisTarget:
+    ref_id: int
+    video_id: str | None
+    path: Path
+
 
 class VideoAnalysis(Base):
     __tablename__ = "video_vtt_analysis"
+    __table_args__ = (
+        UniqueConstraint("ref_id", "model", name="uq_video_vtt_analysis_ref_id_model"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ref_id: Mapped[int] = mapped_column(
@@ -18,8 +34,78 @@ class VideoAnalysis(Base):
     batch_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-# Todo: 다음 기능들을 구현해야 함
-# 1. 영상 하나 당 같은 모델의 출력은 하나만 존재해야함. 이것을 판별하는 함수를 구현. 
-#    이 함수의 반환값은 video_analysis 테이블에서 중복된 모델 출력의 id 묶음 리스트를 반환해야 함.
-# 2. 중복된 모델 출력이 존재할 경우, 가장 최근에 생성된 id를 제외한 나머지 id들을 삭제하는 함수를 구현.
-# 3. 특정 모델 이름의 데이터가 없으면서 영상 파일도 없는 영상 리스트를 반환하는 함수를 구현. 
+
+def find_videos_needing_analysis(
+    session: Session,
+    *,
+    model: str,
+    media_root: str | Path,
+) -> tuple[VideoAnalysisTarget, ...]:
+    if not model.strip():
+        raise ValueError("Model name must not be empty")
+
+    root = Path(media_root).expanduser().resolve()
+    has_analysis = (
+        select(VideoAnalysis.id)
+        .where(VideoAnalysis.ref_id == Video.id, VideoAnalysis.model == model)
+        .exists()
+    )
+    rows = session.execute(
+        select(Video.id, Video.video_id, Video.path)
+        .where(Video.path.is_not(None), ~has_analysis)
+        .order_by(Video.id)
+    )
+
+    targets: list[VideoAnalysisTarget] = []
+    for ref_id, video_id, stored_path in rows:
+        if not stored_path or not stored_path.strip():
+            continue
+        try:
+            path = (root / Path(stored_path)).resolve()
+            if not path.is_file():
+                continue
+        except (OSError, RuntimeError, ValueError):
+            continue
+        targets.append(VideoAnalysisTarget(ref_id=ref_id, video_id=video_id, path=path))
+
+    return tuple(targets)
+
+
+def save_analysis(
+    session: Session,
+    *,
+    ref_id: int,
+    model: str,
+    options: dict[str, Any],
+    batch_description: str,
+    summary: str | None = None,
+) -> VideoAnalysis:
+    if not model.strip():
+        raise ValueError("Model name must not be empty")
+    if not batch_description.strip():
+        raise ValueError("Batch description must not be empty")
+    if session.get(Video, ref_id) is None:
+        raise ValueError(f"Video not found: {ref_id}")
+
+    statement = insert(VideoAnalysis).values(
+        ref_id=ref_id,
+        model=model,
+        options=options,
+        batch_description=batch_description,
+        summary=summary,
+    )
+    statement = statement.on_conflict_do_update(
+        index_elements=[VideoAnalysis.ref_id, VideoAnalysis.model],
+        set_={
+            "options": statement.excluded.options,
+            "batch_description": statement.excluded.batch_description,
+            "summary": statement.excluded.summary,
+        },
+    )
+    session.execute(statement)
+    session.flush()
+    return session.scalars(
+        select(VideoAnalysis)
+        .where(VideoAnalysis.ref_id == ref_id, VideoAnalysis.model == model)
+        .execution_options(populate_existing=True)
+    ).one()
