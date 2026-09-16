@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ytcrawl.db.core import Base
 
 class VideoAnalysis(Base):
-    __tablename__ = "video_analysis"
+    __tablename__ = "video_vtt_analysis"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ref_id: Mapped[int] = mapped_column(
@@ -13,9 +13,10 @@ class VideoAnalysis(Base):
         nullable=False,
         index=True,
     )
-    vtt_model: Mapped[str | None] = mapped_column(Text, nullable=True)
-    vtt_options: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    vtt_result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model: Mapped[str | None] = mapped_column(Text, nullable=True)
+    options: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    batch_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 # Todo: 다음 기능들을 구현해야 함
 # 1. 영상 하나 당 같은 모델의 출력은 하나만 존재해야함. 이것을 판별하는 함수를 구현. 
