@@ -23,9 +23,23 @@ WhisperX 화자 분리에는 실행 환경의 `HF_TOKEN`이 필요합니다.
 | `pdm run python -m ytcrawl --preset interview` | 프리셋 또는 `--query`로 YouTube를 검색하고 메타데이터와 영상을 저장합니다. Creative Commons 제한과 전체 다운로드가 기본으로 활성화됩니다. |
 | `pdm run python -m ytcrawl.crawl.youtube.channel.main --channel-id CHANNEL_ID` | 지정한 채널의 공개 업로드를 수집합니다. `--published-after`와 `--published-before`로 기간을 제한할 수 있습니다. |
 | `pdm run python -m ytcrawl.review` | `config.yaml`의 호스트와 포트로 영상 검수 웹 UI를 실행합니다. |
+| `pdm run python -m ytcrawl.analysis.video_to_text` | 아직 `minicpm-v4.6` 분석 기록이 없는 로컬 영상을 순차 분석하고, 영상마다 결과를 `video_vtt_analysis`에 저장합니다. |
 | `pdm run python -m whistt INPUT_PATH OUTPUT_DIR` | 오디오 또는 영상 파일을 WhisperX로 전사·정렬하고 화자를 분리합니다. `--no-diarization`으로 화자 분리를 생략할 수 있습니다. |
 
 ## 보조 CLI
+
+영상 분석은 기본적으로 1초 간격으로 프레임을 선택하고 영상당 앞의 3개 배치를
+처리합니다. 분석과 요약에는 모두 `minicpm-v4.6`을 사용합니다. 범위를 바꾸려면
+다음과 같이 실행합니다.
+
+```bash
+pdm run python -m ytcrawl.analysis.video_to_text \
+  --max-batches 5 \
+  --interval 0.5
+```
+
+영상 한 편이 끝날 때마다 결과를 커밋합니다. 같은 명령을 다시 실행하면 이미
+저장된 영상은 건너뛰고, 중단되었거나 실패한 영상부터 다시 처리합니다.
 
 JSON 목록 다운로드는 다음과 같이 실행합니다.
 
