@@ -1,16 +1,25 @@
 import argparse
 from fractions import Fraction
+from io import BytesIO
 from math import isfinite
-from typing import Iterator, Sequence, Union
+from typing import Iterator, Sequence, TypedDict
 import av
 from dataclasses import dataclass
+from PIL import Image as PILImage
+from PIL.Image import Image
 
 
 @dataclass
-class FrameBatch:
+class SampledFrame:
     frame_id: int
     frame_time: float
     frame: av.VideoFrame
+
+
+class FrameImage(TypedDict):
+    frame_id: int
+    frame_time: float
+    image_bytes: bytes
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -29,12 +38,12 @@ def iter_frame_batches(
     start_time: float = 0,
     interval: float = 1,
     batch_size: int = 8,
-) -> Iterator[list[FrameBatch]]:
+) -> Iterator[list[SampledFrame]]:
     sample_interval = Fraction(str(interval))
     next_sample_time = Fraction(0)
 
     start_time_f = Fraction(str(start_time))
-    frame_batch: list[FrameBatch] = []
+    frame_batch: list[SampledFrame] = []
     with av.open(file_path) as container:
         for idx, frame in enumerate(container.decode(video=0)):
             if frame.pts is None or frame.time_base is None:
@@ -48,7 +57,7 @@ def iter_frame_batches(
                 continue
 
             frame_batch.append(
-                FrameBatch(
+                SampledFrame(
                     frame_id=idx,
                     frame_time=float(elapsed),
                     frame=frame,
@@ -63,9 +72,35 @@ def iter_frame_batches(
         yield frame_batch
 
 
+def convert_frame_batch_to_image_batch(
+    frame_batch: list[SampledFrame],
+    *,
+    max_image_size: int = 448,  # Maximum size must be greater than zero
+    jpeg_quality: int = 85,  # JPEG quality should be between 1 and 95
+) -> list[FrameImage]:
+    result: list[FrameImage] = []
+    for frame in frame_batch:
+        with frame.frame.to_image() as image:
+            image: Image = image
+            image.thumbnail(
+                (max_image_size, max_image_size), PILImage.Resampling.LANCZOS
+            )
+            with BytesIO() as buffer:
+                image.save(buffer, format="JPEG", quality=jpeg_quality)
+                image_bytes = buffer.getvalue()
 
-def convert_frame_batch_to_image_batch(frames: list[FrameBatch]) -> list:
+        result.append(
+            {
+                "frame_id": frame.frame_id,
+                "frame_time": frame.frame_time,
+                "image_bytes": image_bytes,
+            }
+        )
+    return result
+
+def describe_batch(batch: list[SampledFrame]) -> str:
     pass
+    
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:9d6629d628aa594bba2275f0d28916ec136ac45197d3bbc1a7b5385159461d10"
+content_hash = "sha256:f7df77264a4a935bb42a5eee2c3b6eef6548a64c6fa11a19dfee3443a2fca375"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
@@ -1591,6 +1591,19 @@ version = "12.8.90"
 summary = ""
 files = [
     {file = "nvidia_nvtx_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:5b17e2001cc0d751a5bc2c6ec6d26ad95913324a4adb86788c944f8ce9ba441f"},
+]
+
+[[package]]
+name = "ollama"
+version = "0.6.2"
+summary = ""
+dependencies = [
+    "httpx",
+    "pydantic",
+]
+files = [
+    {file = "ollama-0.6.2-py3-none-any.whl", hash = "sha256:3ad7daab28e5a973445c36a73882a3ef698c2ebb00e21e308652741577509f7d"},
+    {file = "ollama-0.6.2.tar.gz", hash = "sha256:936d55daa684f474364c098611c933626f8d6c7d67065c5b7ae0c477b508b07f"},
 ]
 
 [[package]]
