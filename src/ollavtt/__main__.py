@@ -7,6 +7,7 @@ import av
 from dataclasses import dataclass
 from PIL import Image as PILImage
 from PIL.Image import Image
+from ollama import chat
 
 
 @dataclass
@@ -35,14 +36,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 # Todo: 현재는 프레임 배치만 반환하지만 frame_id, frame_time, frame 튜플 배치 반환으로 변경해야 함
 def iter_frame_batches(
     file_path: str,
-    start_time: float = 0,
-    interval: float = 1,
-    batch_size: int = 8,
+    interval: float = 1,  # interval must be greater than zero
+    batch_size: int = 8,  # batch_size must be greater than zero
 ) -> Iterator[list[SampledFrame]]:
     sample_interval = Fraction(str(interval))
     next_sample_time = Fraction(0)
 
-    start_time_f = Fraction(str(start_time))
+    first_timestamp: Fraction | None = None
     frame_batch: list[SampledFrame] = []
     with av.open(file_path) as container:
         for idx, frame in enumerate(container.decode(video=0)):
@@ -50,9 +50,9 @@ def iter_frame_batches(
                 raise ValueError("Cannot sample a video frame without a timestamp")
 
             timestamp = frame.pts * frame.time_base
-            if start_time_f is None:
-                start_time_f = timestamp
-            elapsed = timestamp - start_time_f
+            if first_timestamp is None:
+                first_timestamp = timestamp
+            elapsed = timestamp - first_timestamp
             if elapsed < next_sample_time:
                 continue
 
@@ -98,10 +98,51 @@ def convert_frame_batch_to_image_batch(
         )
     return result
 
-def describe_batch(batch: list[SampledFrame]) -> str:
-    pass
+
+def _get_prompt_for_batch(batch: list[FrameImage]) -> str:
+    frame_info = "\n".join(
+        f"Frame {item['frame_id']} → {item['frame_time']:.3f} sec" for item in batch
+    )
+
+    prompt = f"""The attached images are frames extracted from the same video in chronological order.
     
+    Image order and timestamps:
+    {frame_info}
+    
+    Describe the visible actions and scene changes in English.
+    Include the frame IDs that support each description.
+    Record any important on-screen text that is readable.
+    Do not infer unseen actions between frames or dialogue that cannot be heard.
+    Mark any details that cannot be clearly verified as uncertain.
+    """
+
+    return prompt
+
+
+def describe_batch(
+    batch: list[FrameImage],
+    *,
+    model: str = "minicpm-v4.6",
+) -> str:
+    prompt = _get_prompt_for_batch(batch)
+    images = [item["image_bytes"] for item in batch]
+
+    response = chat(
+        model=model,
+        messages=[
+            {
+                "role": "user",
+                "content": prompt,
+                "images": images,
+            }
+        ],
+        stream=False,
+        options={"temperature": 0},
+    )
+
+    return response.message.content or ""
 
 
 if __name__ == "__main__":
+    file_path = "sample.mp4"
     args = parse_args()
