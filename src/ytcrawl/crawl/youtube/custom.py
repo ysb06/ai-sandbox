@@ -16,7 +16,6 @@ from sqlalchemy import select
 from ytcrawl.config import AppConfig, ConfigError, get_config
 from ytcrawl.crawl import download
 from ytcrawl.db import core, video_download_attempts, videos, videos_detail
-from ytcrawl.db.custom_migration import ensure_optional_search_id
 from ytcrawl.download.cookies import add_browser_cookie_argument
 from ytcrawl.download.youtube import VIDEO_ID_PATTERN
 
@@ -147,9 +146,6 @@ def run_custom(items: list[dict[str, Any]], source: Path, config: AppConfig, *, 
     if not items:
         print("Total 0 unique videos; nothing to download.")
         return 0
-    backup = ensure_optional_search_id(config.db_path, config.backup_root)
-    if backup:
-        print(f"Migrated optional search_id; database backup: {backup}")
     core.configure(config.db_url)
     core.create_all()
     records = register_candidates(items, source)
