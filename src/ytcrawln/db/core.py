@@ -40,7 +40,8 @@ def get_engine() -> Engine:
 
 
 def create_all() -> None:
-    from ytcrawln.db import video_reviews, videos, videos_detail  # noqa: F401
+    from ytcrawln.db.tables import videos  # noqa: F401
+
     engine = get_engine()
     Base.metadata.create_all(engine)
 

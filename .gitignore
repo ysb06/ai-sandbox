@@ -219,6 +219,7 @@ __pycache__/
 .vscode/
 .env
 /config.yaml
+/config_ytcrawln.yaml
 results/
 inputs/
 outputs/

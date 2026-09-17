@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Iterator, Generator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -55,7 +55,7 @@ def create_all() -> None:
 
 
 @contextmanager
-def session_scope() -> Iterator[Session]:
+def session_scope() -> Generator[Session]:
     if _SessionFactory is None:
         raise RuntimeError(
             "Database is not configured. Call core.configure(db_url) first."
