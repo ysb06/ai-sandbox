@@ -27,6 +27,7 @@ dependencies = [
     "Pillow>=12.3.0",
     "onnxruntime>=1.29.0",
     "ollama>=0.6.2",
+    "opencv-python>=5.0.0.93",
 ]
 requires-python = ">=3.11,<3.13"
 readme = "README.md"
