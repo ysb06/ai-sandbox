@@ -16,7 +16,7 @@ MAX_VIDEO_IDS_PER_REQUEST = 50
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="ytcrawl.search.youtube_detail",
+        prog="ytcrawln.api.youtube.videos",
         description="Save raw YouTube videos.list responses as JSON.",
     )
     parser.add_argument(
@@ -40,6 +40,23 @@ def _chunk_video_ids(video_ids: Sequence[str]) -> list[list[str]]:
     ]
 
 
+def fetch_video_detail_response(
+    video_ids: Sequence[str],
+    *,
+    youtube_client: Any,
+) -> dict[str, Any]:
+    """Fetch one batch without managing the client or persisting the response."""
+    if not 1 <= len(video_ids) <= MAX_VIDEO_IDS_PER_REQUEST:
+        raise ValueError(
+            f"Expected between 1 and {MAX_VIDEO_IDS_PER_REQUEST} video IDs."
+        )
+    return (
+        youtube_client.videos()
+        .list(part=DEFAULT_PART, id=",".join(video_ids))
+        .execute(num_retries=0)
+    )
+
+
 def fetch_video_detail_responses(
     video_ids: Sequence[str],
     api_key: str,
@@ -47,14 +64,7 @@ def fetch_video_detail_responses(
     youtube = create_youtube_client(api_key)
     responses = []
     for batch in _chunk_video_ids(video_ids):
-        response = (
-            youtube.videos()
-            .list(
-                part=DEFAULT_PART,
-                id=",".join(batch),
-            )
-            .execute(num_retries=0)
-        )
+        response = fetch_video_detail_response(batch, youtube_client=youtube)
         responses.append(response)
     return responses
 
@@ -80,11 +90,11 @@ def main(
     *,
     env: Mapping[str, str] | None = None,
 ) -> int:
+    args = parse_args(argv)
     if env is None:
         load_dotenv()
         env = os.environ
 
-    args = parse_args(argv)
     api_key = env.get("YOUTUBE_API_KEY")
     if not api_key:
         print("YOUTUBE_API_KEY is required.", file=sys.stderr)
