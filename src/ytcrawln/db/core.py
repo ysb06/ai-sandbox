@@ -40,10 +40,14 @@ def get_engine() -> Engine:
 
 
 def create_all() -> None:
-    from ytcrawln.db.tables import videos  # noqa: F401
+    """Create only the tables currently supported by ytcrawln."""
+    from ytcrawln.db.tables import videos, videos_detail
 
     engine = get_engine()
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(
+        engine,
+        tables=[videos.Video.__table__, videos_detail.VideoDetail.__table__],
+    )
 
 
 @contextmanager

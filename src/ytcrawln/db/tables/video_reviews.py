@@ -1,4 +1,4 @@
-from __future__ import annotations
+"""현재는 사용하지 않음. 추후 구조가 바뀔 수 있음."""
 
 from datetime import datetime, timezone
 

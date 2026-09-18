@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.yaml"
-DB_FILENAME = "ytcrawl.sqlite3"
+DB_FILENAME = "ytcrawln.sqlite3"
 MEDIA_DIRNAME = "media"
 TEMP_DIRNAME = "Temp"
 BACKUP_DIRNAME = "Backup"

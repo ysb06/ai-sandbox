@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ytcrawln.db.core import Base
@@ -33,4 +33,5 @@ class VideoDetail(Base):
     rating: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     other_info: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     is_synthetic_marked: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    embed_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)

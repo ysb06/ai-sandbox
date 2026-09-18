@@ -17,5 +17,4 @@ class Video(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     publishTime: Mapped[str | None] = mapped_column(String(32), nullable=True)
     path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    embed_code: Mapped[str | None] = mapped_column(Text, nullable=True)
 
