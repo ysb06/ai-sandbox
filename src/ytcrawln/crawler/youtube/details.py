@@ -1,4 +1,6 @@
-"""Import missing video details from YouTube, committing each successful batch."""
+"""
+수집된 video 테이블에 나타난 영상들의 세부 정보를 수집하는 모듈
+"""
 
 import argparse
 import os

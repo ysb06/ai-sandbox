@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
