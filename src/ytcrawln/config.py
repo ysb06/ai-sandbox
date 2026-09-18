@@ -15,6 +15,7 @@ BACKUP_DIRNAME = "Backup"
 class AppConfig:
     config_path: Path = field(repr=False, compare=False)
     data_root: Path
+    media_root: Path
     review_host: str
     review_port: int
 
@@ -27,11 +28,6 @@ class AppConfig:
     def db_url(self) -> str:
         """Return the SQLAlchemy URL for the configured SQLite file."""
         return f"sqlite:///{self.db_path.as_posix()}"
-
-    @property
-    def media_root(self) -> Path:
-        """Return the fixed media directory below DATA_ROOT."""
-        return self.data_root / MEDIA_DIRNAME
 
     @property
     def temp_root(self) -> Path:
@@ -54,9 +50,13 @@ def get_config(
     data_root_value = _read_string(raw_config, "DATA_ROOT")
     data_root = Path(data_root_value).expanduser()
 
+    media_root_value = _read_string(raw_config, "MEDIA_ROOT")
+    media_root = Path(media_root_value).expanduser()
+
     return AppConfig(
         config_path=config_path,
         data_root=data_root,
+        media_root=media_root,
         review_host=_read_string(raw_config, "REVIEW_HOST", "127.0.0.1"),
         review_port=raw_config.get("REVIEW_PORT", 8765),
     )

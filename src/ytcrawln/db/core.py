@@ -41,12 +41,16 @@ def get_engine() -> Engine:
 
 def create_all() -> None:
     """Create only the tables currently supported by ytcrawln."""
-    from ytcrawln.db.tables import videos, videos_detail
+    from ytcrawln.db.tables import videos, videos_detail, face_in_video  # noqa: F401
 
     engine = get_engine()
     Base.metadata.create_all(
         engine,
-        tables=[videos.Video.__table__, videos_detail.VideoDetail.__table__],
+        tables=[
+            videos.Video.__table__,
+            videos_detail.VideoDetail.__table__,
+            face_in_video.FaceInVideo.__table__,
+        ],
     )
 
 

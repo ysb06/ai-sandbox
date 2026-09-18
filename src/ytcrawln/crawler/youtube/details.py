@@ -1,5 +1,5 @@
 """
-수집된 video 테이블에 나타난 영상들의 세부 정보를 수집하는 모듈
+Crawl Step 02: 수집된 video 테이블에 나타난 영상들의 세부 정보를 수집하는 모듈
 """
 
 import argparse
@@ -52,16 +52,6 @@ class DetailImportResult:
                 or self.unprocessed_rows
             )
         )
-
-
-def find_videos_without_details(session: Session) -> list[tuple[int, str | None]]:
-    has_detail = (
-        select(VideoDetail.id).where(VideoDetail.video_ref_id == Video.id).exists()
-    )
-    rows = session.execute(
-        select(Video.id, Video.video_id).where(~has_detail).order_by(Video.id)
-    )
-    return [(row.id, row.video_id) for row in rows]
 
 
 def _object(item: dict[str, Any], key: str) -> dict[str, Any]:
@@ -209,7 +199,13 @@ def fill_missing_video_details(
 ) -> DetailImportResult:
     """Fill absent detail rows; each batch commits before the next API request."""
     with session_factory() as session:
-        rows = find_videos_without_details(session)
+        has_detail = (
+            select(VideoDetail.id).where(VideoDetail.video_ref_id == Video.id).exists()
+        )
+        result = session.execute(
+            select(Video.id, Video.video_id).where(~has_detail).order_by(Video.id)
+        )
+        rows = [(row.id, row.video_id) for row in result]
     result = DetailImportResult(missing_rows=len(rows))
     grouped: dict[str, list[int]] = {}
     for ref_id, video_id in rows:
@@ -242,7 +238,7 @@ def fill_missing_video_details(
             response = youtube_videos.fetch_video_detail_response(
                 batch_ids, youtube_client=youtube
             )
-            
+
             try:
                 items = _map_response(response, batch_ids)
             except ValueError as exc:
