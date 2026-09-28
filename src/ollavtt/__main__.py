@@ -15,7 +15,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
 
-    file_path = "results/ytcrawl-stage/media/vid_2mLEwpLlwF8.mp4" if args.input is None else args.input
+    file_path = "results/ytcrawl-stage/media/vid__4NgxGcX4nM.mp4" if args.input is None else args.input
     for batch in iter_frame_batches(file_path):
         image_batch = convert_frame_batch_to_image_batch(batch)
         batch.clear()
