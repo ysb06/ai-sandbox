@@ -106,7 +106,7 @@ def scan_container(
     with (
         closing(iter_container_images(container, interval=interval)) as frames,
         tqdm(
-            total=duration_sec,
+            total=round(duration_sec, 2) if duration_sec is not None else None,
             disable=not show_progress,
             unit="s" if duration_sec is not None else "frame",
         ) as progress,
@@ -119,7 +119,7 @@ def scan_container(
                 else:
                     # Reserve 100% for exhaustion, even with inaccurate metadata.
                     position = min(sampled.timestamp_sec, duration_sec * 0.999)
-                    progress.update(max(0.0, position - progress.n))
+                    progress.update(round(max(0.0, position - progress.n), 2))
 
             if not faces:
                 continue
@@ -135,7 +135,7 @@ def scan_container(
 
         # An exception or explicit generator close bypasses this completion step.
         if show_progress and duration_sec is not None:
-            progress.update(max(0.0, duration_sec - progress.n))
+            progress.update(round(max(0.0, duration_sec - progress.n), 2))
 
 
 def scan_video(

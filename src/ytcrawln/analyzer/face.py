@@ -120,6 +120,7 @@ def analyze_pending_videos(
                 )
                 session.flush()
             completed_videos += 1
+            print(f"영상 {video_ref_id} 처리 완료: {file_path}")
 
         return completed_videos
     finally:
