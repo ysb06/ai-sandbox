@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import cast
 
 import av
+from av.container import InputContainer
 import numpy as np
 from numpy.typing import NDArray
 from PIL import Image as PILImage
+from tqdm import tqdm
 
 from .detector import FaceDetection, UltraLightFaceDetector
 
@@ -24,12 +26,6 @@ class SampledImage:
 
 @dataclass
 class FrameDetectionResult:
-    """Faces in a sampled frame, without retaining the image array.
-
-    Dimensions and xyxy face boxes use rotation-corrected original image pixels.
-    timestamp_sec is relative to the first decoded video frame.
-    """
-
     frame_index: int
     timestamp_sec: float
     image_width: int
@@ -56,8 +52,8 @@ def _frame_to_rgb_image(frame: av.VideoFrame) -> NDArray[np.uint8]:
         return np.array(image, dtype=np.uint8, copy=True, order="C")
 
 
-def iter_video_images(
-    file_path: str | Path,
+def iter_container_images(
+    container: InputContainer,
     *,
     interval: float = 0.5,
 ) -> Generator[SampledImage, None, None]:
@@ -65,36 +61,38 @@ def iter_video_images(
     next_sample_time = Fraction(0)
     first_timestamp: Fraction | None = None
 
-    with av.open(str(file_path)) as container:
-        for frame_index, frame in enumerate(container.decode(video=0)):
-            timestamp = cast(int, frame.pts) * cast(Fraction, frame.time_base)
-            if first_timestamp is None:
-                first_timestamp = timestamp
-            elapsed = timestamp - first_timestamp
-            if elapsed < next_sample_time:
-                continue
+    for frame_index, frame in enumerate(container.decode(video=0)):
+        timestamp = cast(int, frame.pts) * cast(Fraction, frame.time_base)
+        if first_timestamp is None:
+            first_timestamp = timestamp
+        elapsed = timestamp - first_timestamp
+        if elapsed < next_sample_time:
+            continue
 
-            next_sample_time = (elapsed // sample_interval + 1) * sample_interval
-            yield SampledImage(
-                frame_index=frame_index,
-                timestamp_sec=float(elapsed),
-                image=_frame_to_rgb_image(frame),
-            )
+        next_sample_time = (elapsed // sample_interval + 1) * sample_interval
+        yield SampledImage(
+            frame_index=frame_index,
+            timestamp_sec=float(elapsed),
+            image=_frame_to_rgb_image(frame),
+        )
 
 
-def scan_video(
+def iter_video_images(
     file_path: str | Path,
+    *,
+    interval: float = 0.5,
+) -> Generator[SampledImage, None, None]:
+    with av.open(str(file_path)) as container:
+        yield from iter_container_images(container, interval=interval)
+
+
+def scan_container(
+    container: InputContainer,
     *,
     detector: UltraLightFaceDetector,
     interval: float = 0.5,
 ) -> Generator[tuple[NDArray[np.uint8], FrameDetectionResult], None, None]:
-    """Yield frames with detected faces in decoding order using one detector.
-
-    Errors propagate to the caller. Exhausting or explicitly closing this
-    generator also closes the underlying frame generator. Callers stopping
-    early should close it, for example with contextlib.closing.
-    """
-    with closing(iter_video_images(file_path, interval=interval)) as frames:
+    with closing(iter_container_images(container, interval=interval)) as frames:
         for sampled in frames:
             faces = detector.detect(sampled.image)
             if not faces:
@@ -108,3 +106,13 @@ def scan_video(
                 image_height=height,
                 faces=faces,
             )
+
+
+def scan_video(
+    file_path: str | Path,
+    *,
+    detector: UltraLightFaceDetector,
+    interval: float = 0.5,
+) -> Generator[tuple[NDArray[np.uint8], FrameDetectionResult], None, None]:
+    with av.open(str(file_path)) as container:
+        yield from scan_container(container, detector=detector, interval=interval)
