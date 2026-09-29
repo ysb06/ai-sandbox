@@ -11,12 +11,15 @@ def select_face_results(
     detector: UltraLightFaceDetector,
     max_results: int,
     interval: float = 1.0,
+    *,
+    show_progress: bool = False,
 ) -> list[FrameDetectionResult]:
     with closing(
         scan_container(
             container,
             detector=detector,
             interval=interval,
+            show_progress=show_progress,
         )
     ) as detections:
         candidates = [result for _, result in detections]

@@ -2,12 +2,13 @@ from collections.abc import Generator
 from contextlib import ExitStack, closing
 from dataclasses import dataclass
 from fractions import Fraction
+from math import isfinite
 from pathlib import Path
 from typing import cast
 
 import av
-from av.container import InputContainer
 import numpy as np
+from av.container import InputContainer
 from numpy.typing import NDArray
 from PIL import Image as PILImage
 from tqdm import tqdm
@@ -91,10 +92,35 @@ def scan_container(
     *,
     detector: UltraLightFaceDetector,
     interval: float = 0.5,
+    show_progress: bool = False,
 ) -> Generator[tuple[NDArray[np.uint8], FrameDetectionResult], None, None]:
-    with closing(iter_container_images(container, interval=interval)) as frames:
+    """Detect faces, optionally reporting approximate video-time progress."""
+    duration_sec: float | None = None
+    if show_progress:
+        stream = container.streams.video[0]
+        if stream.duration is not None and stream.time_base is not None:
+            duration = float(stream.duration * stream.time_base)
+            if isfinite(duration) and duration > 0:
+                duration_sec = duration
+
+    with (
+        closing(iter_container_images(container, interval=interval)) as frames,
+        tqdm(
+            total=duration_sec,
+            disable=not show_progress,
+            unit="s" if duration_sec is not None else "frame",
+        ) as progress,
+    ):
         for sampled in frames:
             faces = detector.detect(sampled.image)
+            if show_progress:
+                if duration_sec is None:
+                    progress.update(1)
+                else:
+                    # Reserve 100% for exhaustion, even with inaccurate metadata.
+                    position = min(sampled.timestamp_sec, duration_sec * 0.999)
+                    progress.update(max(0.0, position - progress.n))
+
             if not faces:
                 continue
 
@@ -107,12 +133,22 @@ def scan_container(
                 faces=faces,
             )
 
+        # An exception or explicit generator close bypasses this completion step.
+        if show_progress and duration_sec is not None:
+            progress.update(max(0.0, duration_sec - progress.n))
+
 
 def scan_video(
     file_path: str | Path,
     *,
     detector: UltraLightFaceDetector,
     interval: float = 0.5,
+    show_progress: bool = False,
 ) -> Generator[tuple[NDArray[np.uint8], FrameDetectionResult], None, None]:
     with av.open(str(file_path)) as container:
-        yield from scan_container(container, detector=detector, interval=interval)
+        yield from scan_container(
+            container,
+            detector=detector,
+            interval=interval,
+            show_progress=show_progress,
+        )

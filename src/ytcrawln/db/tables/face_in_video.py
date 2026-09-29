@@ -1,13 +1,4 @@
-from sqlalchemy import (
-    Boolean,
-    Float,
-    ForeignKey,
-    Integer,
-    JSON,
-    String,
-    Text,
-    UniqueConstraint,
-)
+from sqlalchemy import Float, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ytcrawln.db.core import Base
