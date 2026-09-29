@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from ytcrawln.config import DEFAULT_CONFIG_PATH, get_config
 from ytcrawln.db import core
-from ytcrawln.db.tables.videos import Video
+from ytcrawln.db.tables.videos import Videos
 
 COPY_COLUMNS = (
     "kind",
@@ -95,7 +95,7 @@ def _import_rows(source: sqlite3.Connection, session: Session) -> ImportResult:
     source_rows = 0
     id_mapping: dict[int, int] = {}
     while rows := cursor.fetchmany(BATCH_SIZE):
-        batch: list[tuple[int, Video]] = []
+        batch: list[tuple[int, Videos]] = []
         batch_ids: set[int] = set()
         for row in rows:
             source_id = row["id"]
@@ -109,7 +109,7 @@ def _import_rows(source: sqlite3.Connection, session: Session) -> ImportResult:
                 )
             batch_ids.add(source_id)
             # Never assign the legacy primary key to the new model.
-            video = Video(**{column: row[column] for column in COPY_COLUMNS})
+            video = Videos(**{column: row[column] for column in COPY_COLUMNS})
             batch.append((source_id, video))
 
         session.add_all([video for _, video in batch])

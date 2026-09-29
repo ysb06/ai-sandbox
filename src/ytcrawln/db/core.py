@@ -47,7 +47,7 @@ def create_all() -> None:
     Base.metadata.create_all(
         engine,
         tables=[
-            videos.Video.__table__,
+            videos.Videos.__table__,
             videos_detail.VideoDetail.__table__,
             face_in_video.FaceInVideo.__table__,
         ],

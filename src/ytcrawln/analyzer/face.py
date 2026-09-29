@@ -1,9 +1,15 @@
 from contextlib import closing
+from pathlib import Path
 
 from av.container import InputContainer
+from sqlalchemy import URL, create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from fascan.detector import UltraLightFaceDetector
 from fascan.pipeline import FrameDetectionResult, scan_container
+from ytcrawln.db.tables.face_in_video import FaceInVideo
+from ytcrawln.db.tables.videos import get_videos_without_faces
+from ytcrawln.utils import open_video_container
 
 
 def select_face_results(
@@ -25,6 +31,93 @@ def select_face_results(
         candidates = [result for _, result in detections]
 
     return _farthest_point_sampling(candidates, max_results)
+
+
+def analyze_and_save_video(
+    video: tuple[int, str | Path],
+    max_results: int,
+    session: Session,
+    detector: UltraLightFaceDetector,
+    interval: float = 1.0,
+    *,
+    show_progress: bool = False,
+) -> int:
+    video_ref_id, file_path = video
+
+    with open_video_container(file_path) as container:
+        results = select_face_results(
+            container=container,
+            detector=detector,
+            max_results=max_results,
+            interval=interval,
+            show_progress=show_progress,
+        )
+
+    added_faces = 0
+    for result in results:
+        for face in result.faces:
+            left, top, right, bottom = face.bbox
+            session.add(
+                FaceInVideo(
+                    video_ref_id=video_ref_id,
+                    frame=result.frame_index,
+                    time_sec=result.timestamp_sec,
+                    image_width=result.image_width,
+                    image_height=result.image_height,
+                    score=face.score,
+                    bbox_left=left,
+                    bbox_top=top,
+                    bbox_right=right,
+                    bbox_bottom=bottom,
+                )
+            )
+            added_faces += 1
+
+    return added_faces
+
+
+def analyze_pending_videos(
+    db_path: str | Path,
+    max_results: int,
+    *,
+    media_root: str | Path,
+    model_path: str | Path,
+    interval: float = 1.0,
+    show_progress: bool = False,
+) -> int:
+    database_path = Path(db_path).expanduser().resolve()
+    media_directory = Path(media_root).expanduser()
+    engine = create_engine(URL.create("sqlite", database=str(database_path)))
+    try:
+        factory = sessionmaker(bind=engine, expire_on_commit=False)
+        with factory() as session:
+            videos = get_videos_without_faces(session)
+
+        if not videos:
+            return 0
+
+        detector = UltraLightFaceDetector(model_path=Path(model_path).expanduser())
+        completed_videos = 0
+        for video_ref_id, path in videos:
+            file_path = Path(path).expanduser()
+            if not file_path.is_absolute():
+                file_path = media_directory / file_path
+
+            with factory.begin() as session:
+                analyze_and_save_video(
+                    video=(video_ref_id, file_path),
+                    max_results=max_results,
+                    session=session,
+                    detector=detector,
+                    interval=interval,
+                    show_progress=show_progress,
+                )
+                session.flush()
+            completed_videos += 1
+
+        return completed_videos
+    finally:
+        engine.dispose()
 
 
 def _farthest_point_sampling(

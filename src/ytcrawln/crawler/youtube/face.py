@@ -14,7 +14,7 @@ from tqdm import tqdm
 from ytcrawln.config import get_config, DEFAULT_CONFIG_PATH
 from ytcrawln.db import core
 from ytcrawln.db.tables.face_in_video import FaceInVideo
-from ytcrawln.db.tables.videos import Video
+from ytcrawln.db.tables.videos import Videos
 
 from fascan.pipeline import scan_video
 from fascan.detector import UltraLightFaceDetector
@@ -29,10 +29,10 @@ def run_face_detection(args: Namespace) -> None:
     factory = sessionmaker(bind=core.get_engine(), expire_on_commit=False)
     with factory() as session:
         has_face = (
-            select(FaceInVideo.id).where(FaceInVideo.video_ref_id == Video.id).exists()
+            select(FaceInVideo.id).where(FaceInVideo.video_ref_id == Videos.id).exists()
         )
         videos = session.execute(
-            select(Video.id, Video.path).where(~has_face).order_by(Video.id)
+            select(Videos.id, Videos.path).where(~has_face).order_by(Videos.id)
         ).all()
 
     media_root = config.media_root

@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from ytcrawln.api.youtube import videos as youtube_videos
 from ytcrawln.config import DEFAULT_CONFIG_PATH, get_config
 from ytcrawln.db import core
-from ytcrawln.db.tables.videos import Video
+from ytcrawln.db.tables.videos import Videos
 from ytcrawln.db.tables.videos_detail import VideoDetail
 
 VIDEO_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{11}")
@@ -166,7 +166,7 @@ def _save_details(
             batch = refs[start : start + 500]
             current = dict(
                 session.execute(
-                    select(Video.id, Video.video_id).where(Video.id.in_(batch))
+                    select(Videos.id, Videos.video_id).where(Videos.id.in_(batch))
                 ).all()
             )
             existing = set(
@@ -200,10 +200,10 @@ def fill_missing_video_details(
     """Fill absent detail rows; each batch commits before the next API request."""
     with session_factory() as session:
         has_detail = (
-            select(VideoDetail.id).where(VideoDetail.video_ref_id == Video.id).exists()
+            select(VideoDetail.id).where(VideoDetail.video_ref_id == Videos.id).exists()
         )
         result = session.execute(
-            select(Video.id, Video.video_id).where(~has_detail).order_by(Video.id)
+            select(Videos.id, Videos.video_id).where(~has_detail).order_by(Videos.id)
         )
         rows = [(row.id, row.video_id) for row in result]
     result = DetailImportResult(missing_rows=len(rows))
