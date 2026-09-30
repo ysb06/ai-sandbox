@@ -123,6 +123,15 @@ def get_video_detail(
     )
 
 
+def resolve_media_path(video_ref_id: int, *, media_root: Path) -> Path | None:
+    """Resolve an existing video file using the same rules as the detail API."""
+    statement = select(Videos.path).where(Videos.id == video_ref_id)
+    with Session(core.get_engine()) as session:
+        stored_path = session.execute(statement).scalar_one_or_none()
+
+    return _resolve_video_file_path(stored_path, media_root)
+
+
 def _resolve_video_file_path(stored_path: str | None, media_root: Path) -> Path | None:
     if not stored_path:
         return None

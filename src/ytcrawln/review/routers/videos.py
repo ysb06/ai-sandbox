@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Request
+from fastapi.responses import FileResponse
 
 from ytcrawln.review import schemas, service
 
@@ -30,6 +31,23 @@ def get_video_details(
     return response
 
 
-@router.get("/videos/media/{video_ref_id}", tags=["videos"])
-async def get_video_media(video_ref_id: int):
-    return None
+@router.get(
+    "/videos/media/{video_ref_id}",
+    response_class=FileResponse,
+    tags=["videos"],
+)
+def get_video_media(
+    request: Request,
+    video_ref_id: Annotated[int, Path(ge=1)],
+) -> FileResponse:
+    path = service.resolve_media_path(
+        video_ref_id,
+        media_root=request.app.state.media_root,
+    )
+    if path is None:
+        raise HTTPException(status_code=404, detail="Video file not found.")
+    return FileResponse(
+        path,
+        filename=path.name,
+        content_disposition_type="inline",
+    )
