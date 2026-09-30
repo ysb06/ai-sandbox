@@ -288,6 +288,9 @@ function selectCandidate(clip, button) {
   // Keep both pending loads and connected media when only the candidate changes.
   if (playerState.videoRefId === clip.video_ref_id && playerState.status !== "error") {
     updateClipButton();
+    if (playerState.status === "ready") {
+      void playSelectedClip();
+    }
     return;
   }
   loadVideo(clip.video_ref_id);
@@ -346,6 +349,7 @@ async function loadVideo(videoRefId) {
       videoPlayer.hidden = false;
       playerMessage.hidden = true;
       updateClipButton();
+      void playSelectedClip();
     }, { signal: mediaController.signal });
 
     videoPlayer.addEventListener("durationchange", () => {

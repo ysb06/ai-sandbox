@@ -8,11 +8,6 @@ from ytcrawln.review import schemas, service
 router = APIRouter()
 
 
-@router.get("/videos/", tags=["videos"])
-async def get_videos_list():
-    return None
-
-
 @router.get(
     "/videos/{video_ref_id}",
     response_model=schemas.VideoDetailResponse,

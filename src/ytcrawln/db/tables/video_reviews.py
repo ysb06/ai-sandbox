@@ -1,10 +1,8 @@
-"""현재는 사용하지 않음. 추후 구조가 바뀔 수 있음."""
-
 from datetime import datetime, timezone
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy import UniqueConstraint, select
-from sqlalchemy.orm import Mapped, Session, mapped_column
+from sqlalchemy import UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
 
 from ytcrawln.db.core import Base
 
