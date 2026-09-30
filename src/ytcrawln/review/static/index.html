@@ -9,7 +9,7 @@
   <script defer src="/static/review.js"></script>
 </head>
 <body>
-  <!-- Candidate selection and the player use live data; metadata and clip playback are added separately. -->
+  <!-- Candidates, metadata, and clip playback use the original video without creating clip files. -->
   <div class="app-shell">
     <header class="page-header">
       <p class="eyebrow">FACE CLIP REVIEW</p>
@@ -29,7 +29,7 @@
         <section class="panel player-panel" aria-label="영상 플레이어">
           <div class="video-stage">
             <video id="video-player" controls preload="metadata" playsinline hidden aria-label="선택한 원본 영상"></video>
-            <div class="stage-labels"><span class="stage-badge">원본 영상</span><span class="aspect-label">16:9</span></div>
+            <!-- <div class="stage-labels"><span class="stage-badge">원본 영상</span><span class="aspect-label">16:9</span></div> -->
             <div class="video-placeholder" id="player-message" role="status" aria-live="polite">
               <span class="video-placeholder-icon" aria-hidden="true">
                 <svg viewBox="0 0 48 48" fill="none"><rect x="7" y="10" width="34" height="28" rx="5" stroke="currentColor" stroke-width="1.5"/><path d="m21 18 9 6-9 6V18Z" fill="currentColor"/></svg>
@@ -44,33 +44,20 @@
               <svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 11 7L6 17V3Z" fill="currentColor"/></svg>
               클립 재생
             </button>
+            <p class="clip-playback-message" id="clip-playback-message" role="status" aria-live="polite" hidden></p>
           </div>
         </section>
 
         <aside class="panel info-panel" aria-labelledby="info-title">
           <div class="panel-heading"><h2 id="info-title">영상 정보</h2></div>
           <div class="info-tabs" role="tablist" aria-label="영상 정보 탭">
-            <button class="info-tab is-active" id="overview-tab" type="button" role="tab" aria-selected="true" aria-controls="overview-panel" disabled>개요</button>
-            <button class="info-tab" id="detail-tab" type="button" role="tab" aria-selected="false" aria-controls="detail-panel" disabled>상세</button>
+            <button class="info-tab is-active" id="overview-tab" type="button" role="tab" aria-selected="true" aria-controls="overview-panel" tabindex="0">개요</button>
+            <button class="info-tab" id="detail-tab" type="button" role="tab" aria-selected="false" aria-controls="detail-panel" tabindex="-1">상세</button>
           </div>
-          <div class="metadata-scroll">
-            <section id="overview-panel" role="tabpanel" aria-labelledby="overview-tab">
-              <dl class="info-list">
-                <div class="info-row info-row-title"><dt>제목</dt><dd>인터뷰 장면 · 예시 영상 A</dd></div>
-                <div class="info-row"><dt>영상 ID</dt><dd class="mono">12</dd></div>
-                <div class="info-row"><dt>YouTube ID</dt><dd class="mono">sample-video-a</dd></div>
-                <div class="info-row"><dt>게시일</dt><dd>2026. 09. 01.</dd></div>
-                <div class="info-row"><dt>영상 길이</dt><dd class="mono">01:00</dd></div>
-                <div class="info-row"><dt>해상도</dt><dd>1920 × 1080</dd></div>
-                <div class="info-row"><dt>라이선스</dt><dd class="muted">—</dd></div>
-                <div class="info-row"><dt>자막</dt><dd class="muted">—</dd></div>
-                <div class="info-row"><dt>합성 콘텐츠 표시</dt><dd class="muted">—</dd></div>
-                <div class="info-row"><dt>조회 / 좋아요 / 댓글</dt><dd class="muted">— / — / —</dd></div>
-                <div class="info-row"><dt>미디어</dt><dd><span class="neutral-badge">미연결</span></dd></div>
-              </dl>
-              <div class="metadata-note"><span class="note-mark" aria-hidden="true">i</span><p>화면 구성을 위한 예시 정보입니다.</p></div>
-            </section>
-            <section id="detail-panel" role="tabpanel" aria-labelledby="detail-tab" hidden><p>상세 메타데이터 표시 영역</p></section>
+          <div class="metadata-scroll" id="metadata-content" aria-busy="false">
+            <p class="metadata-message" id="metadata-message" role="status" aria-live="polite">검수 대상을 선택해 주세요.</p>
+            <section id="overview-panel" role="tabpanel" aria-labelledby="overview-tab" tabindex="0"></section>
+            <section id="detail-panel" role="tabpanel" aria-labelledby="detail-tab" tabindex="0" hidden></section>
           </div>
         </aside>
       </div>
