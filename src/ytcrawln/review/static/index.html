@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>ytcrawln · 클립 검수</title>
+  <link rel="stylesheet" href="./review.css">
+</head>
+<body>
+  <!-- Static design preview. All data below is illustrative; no API or script is connected. -->
+  <div class="app-shell">
+    <header class="page-header">
+      <p class="eyebrow">FACE CLIP REVIEW</p>
+      <h1>클립 검수</h1>
+    </header>
+
+    <main>
+      <div class="review-workspace">
+        <nav class="panel candidate-panel" aria-labelledby="candidate-title">
+          <div class="panel-heading">
+            <div class="heading-with-count"><h2 id="candidate-title">검수 대상</h2><span class="count-badge">8</span></div>
+          </div>
+          <ol class="candidate-list" id="clip-list">
+            <li>
+              <button class="candidate" type="button" disabled>
+                <span class="candidate-number">01</span>
+                <span class="candidate-content"><span class="candidate-title">인터뷰 장면 · 예시 영상 A</span><span class="candidate-meta">영상 12 <span>프레임 30</span></span><span class="candidate-time">00:01.000 <span>검출</span></span></span>
+              </button>
+            </li>
+            <li>
+              <button class="candidate is-selected" type="button" aria-current="true" disabled>
+                <span class="candidate-number">02</span>
+                <span class="candidate-content"><span class="candidate-title">인터뷰 장면 · 예시 영상 A</span><span class="candidate-meta">영상 12 <span>프레임 600</span></span><span class="candidate-time">00:20.000 <span>검출</span></span></span>
+                <span class="selection-dot" aria-hidden="true"></span>
+              </button>
+            </li>
+            <li>
+              <button class="candidate" type="button" disabled>
+                <span class="candidate-number">03</span>
+                <span class="candidate-content"><span class="candidate-title">인터뷰 장면 · 예시 영상 A</span><span class="candidate-meta">영상 12 <span>프레임 1140</span></span><span class="candidate-time">00:38.000 <span>검출</span></span></span>
+              </button>
+            </li>
+            <li>
+              <button class="candidate" type="button" disabled>
+                <span class="candidate-number">04</span>
+                <span class="candidate-content"><span class="candidate-title">발표 장면 · 예시 영상 B</span><span class="candidate-meta">영상 18 <span>프레임 90</span></span><span class="candidate-time">00:03.000 <span>검출</span></span></span>
+              </button>
+            </li>
+            <li>
+              <button class="candidate" type="button" disabled>
+                <span class="candidate-number">05</span>
+                <span class="candidate-content"><span class="candidate-title">발표 장면 · 예시 영상 B</span><span class="candidate-meta">영상 18 <span>프레임 420</span></span><span class="candidate-time">00:14.000 <span>검출</span></span></span>
+              </button>
+            </li>
+            <li>
+              <button class="candidate" type="button" disabled>
+                <span class="candidate-number">06</span>
+                <span class="candidate-content"><span class="candidate-title">대화 장면 · 예시 영상 C</span><span class="candidate-meta">영상 24 <span>프레임 210</span></span><span class="candidate-time">00:07.000 <span>검출</span></span></span>
+              </button>
+            </li>
+            <li>
+              <button class="candidate" type="button" disabled>
+                <span class="candidate-number">07</span>
+                <span class="candidate-content"><span class="candidate-title">대화 장면 · 예시 영상 C</span><span class="candidate-meta">영상 24 <span>프레임 660</span></span><span class="candidate-time">00:22.000 <span>검출</span></span></span>
+              </button>
+            </li>
+            <li>
+              <button class="candidate" type="button" disabled>
+                <span class="candidate-number">08</span>
+                <span class="candidate-content"><span class="candidate-title">세로 촬영 · 예시 영상 D</span><span class="candidate-meta">영상 31 <span>프레임 60</span></span><span class="candidate-time">00:02.000 <span>검출</span></span></span>
+              </button>
+            </li>
+          </ol>
+        </nav>
+
+        <section class="panel player-panel" aria-label="영상 플레이어">
+          <div class="video-stage">
+            <video id="video-player" preload="none" aria-label="선택한 원본 영상"></video>
+            <div class="stage-labels"><span class="stage-badge">원본 영상</span><span class="aspect-label">16:9</span></div>
+            <div class="video-placeholder" id="player-message">
+              <span class="video-placeholder-icon" aria-hidden="true">
+                <svg viewBox="0 0 48 48" fill="none"><rect x="7" y="10" width="34" height="28" rx="5" stroke="currentColor" stroke-width="1.5"/><path d="m21 18 9 6-9 6V18Z" fill="currentColor"/></svg>
+              </span>
+              <p>선택한 원본 영상</p>
+              <span>영상이 연결되면 이곳에 표시됩니다.</span>
+            </div>
+            <div class="player-controls-preview" aria-label="영상 컨트롤 디자인 예시">
+              <svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 11 7L6 17V3Z" fill="currentColor"/></svg>
+              <span class="player-clock">00:17 <span>/ 01:00</span></span>
+              <span class="player-progress" aria-hidden="true"><span></span></span>
+              <svg class="icon volume-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M9 4 5 7H2v6h3l4 3V4Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M12 7a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+
+          <div class="clip-actions">
+            <button class="clip-play-button" id="clip-play-button" type="button" disabled>
+              <svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 11 7L6 17V3Z" fill="currentColor"/></svg>
+              클립 재생
+            </button>
+          </div>
+        </section>
+
+        <aside class="panel info-panel" aria-labelledby="info-title">
+          <div class="panel-heading"><h2 id="info-title">영상 정보</h2></div>
+          <div class="info-tabs" role="tablist" aria-label="영상 정보 탭">
+            <button class="info-tab is-active" id="overview-tab" type="button" role="tab" aria-selected="true" aria-controls="overview-panel" disabled>개요</button>
+            <button class="info-tab" id="detail-tab" type="button" role="tab" aria-selected="false" aria-controls="detail-panel" disabled>상세</button>
+          </div>
+          <div class="metadata-scroll">
+            <section id="overview-panel" role="tabpanel" aria-labelledby="overview-tab">
+              <dl class="info-list">
+                <div class="info-row info-row-title"><dt>제목</dt><dd>인터뷰 장면 · 예시 영상 A</dd></div>
+                <div class="info-row"><dt>영상 ID</dt><dd class="mono">12</dd></div>
+                <div class="info-row"><dt>YouTube ID</dt><dd class="mono">sample-video-a</dd></div>
+                <div class="info-row"><dt>게시일</dt><dd>2026. 09. 01.</dd></div>
+                <div class="info-row"><dt>영상 길이</dt><dd class="mono">01:00</dd></div>
+                <div class="info-row"><dt>해상도</dt><dd>1920 × 1080</dd></div>
+                <div class="info-row"><dt>라이선스</dt><dd class="muted">—</dd></div>
+                <div class="info-row"><dt>자막</dt><dd class="muted">—</dd></div>
+                <div class="info-row"><dt>합성 콘텐츠 표시</dt><dd class="muted">—</dd></div>
+                <div class="info-row"><dt>조회 / 좋아요 / 댓글</dt><dd class="muted">— / — / —</dd></div>
+                <div class="info-row"><dt>미디어</dt><dd><span class="neutral-badge">미연결</span></dd></div>
+              </dl>
+              <div class="metadata-note"><span class="note-mark" aria-hidden="true">i</span><p>화면 구성을 위한 예시 정보입니다.</p></div>
+            </section>
+            <section id="detail-panel" role="tabpanel" aria-labelledby="detail-tab" hidden><p>상세 메타데이터 표시 영역</p></section>
+          </div>
+        </aside>
+      </div>
+
+      <section class="panel review-records" aria-labelledby="review-records-title">
+        <div class="records-heading"><h2 id="review-records-title">Review 기록</h2><span class="neutral-badge">준비 중</span></div>
+        <div class="records-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M9 3h6v3H9V3Zm0 8h6m-6 4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div><p>검수 기록을 위한 공간입니다.</p><span>판정과 메모는 다음 단계에서 추가됩니다.</span></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

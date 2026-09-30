@@ -16,22 +16,3 @@ class Videos(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     publishTime: Mapped[str | None] = mapped_column(String(32), nullable=True)
     path: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-
-def get_videos_without_faces(session: Session) -> list[tuple[int, str]]:
-    """Return ID/path pairs without face records, using the caller's session."""
-    has_faces = (
-        select(FaceInVideo.id)
-        .where(FaceInVideo.video_ref_id == Videos.id)
-        .exists()
-    )
-    statement = (
-        select(Videos.id, Videos.path)
-        .where(~has_faces, Videos.path.is_not(None), Videos.path != "")
-        .order_by(Videos.id)
-    )
-    return [
-        (video_id, path)
-        for video_id, path in session.execute(statement)
-        if path is not None
-    ]

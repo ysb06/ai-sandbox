@@ -5,14 +5,14 @@ from contextlib import closing
 from pathlib import Path
 
 from av.container import InputContainer
-from sqlalchemy import URL, create_engine
+from sqlalchemy import URL, create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from fascan.detector import UltraLightFaceDetector
 from fascan.pipeline import FrameDetectionResult, scan_container
 from ytcrawln.config import DEFAULT_CONFIG_PATH, get_config
 from ytcrawln.db.tables.face_in_video import FaceInVideo
-from ytcrawln.db.tables.videos import get_videos_without_faces
+from ytcrawln.db.tables.videos import Videos
 from ytcrawln.utils import open_video_container
 
 DEFAULT_MODEL_PATH = DEFAULT_CONFIG_PATH.parent / "models" / "version-RFB-640.onnx"
@@ -164,6 +164,22 @@ def _farthest_point_sampling(
     return [ordered[index] for index in sorted(selected)]
 
 
+def get_videos_without_faces(session: Session) -> list[tuple[int, str]]:
+    has_faces = (
+        select(FaceInVideo.id).where(FaceInVideo.video_ref_id == Videos.id).exists()
+    )
+    statement = (
+        select(Videos.id, Videos.path)
+        .where(~has_faces, Videos.path.is_not(None), Videos.path != "")
+        .order_by(Videos.id)
+    )
+    return [
+        (video_id, path)
+        for video_id, path in session.execute(statement)
+        if path is not None
+    ]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Analyze local videos and save sampled face detections.",
@@ -227,7 +243,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"처리 완료 영상 수: {completed_videos} (얼굴 0건 영상 포함)")
         return 0
     except KeyboardInterrupt:
-        print("사용자 요청으로 중단했습니다. 이미 commit된 영상은 유지됩니다.", file=sys.stderr)
+        print(
+            "사용자 요청으로 중단했습니다. 이미 commit된 영상은 유지됩니다.",
+            file=sys.stderr,
+        )
         return 130
 
 

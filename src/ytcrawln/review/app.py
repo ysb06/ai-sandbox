@@ -6,11 +6,23 @@ from sqlalchemy.engine import make_url
 from ytcrawln.config import get_config
 from ytcrawln.db import core
 
-from .routers import videos
+from .routers import clips, videos
 
 
-def create_app(*, db_url: str | None = None) -> FastAPI:
-    selected_db_url = get_config().db_url if db_url is None else db_url
+def create_app(
+    *,
+    db_url: str | None = None,
+    media_root: str | Path | None = None,
+) -> FastAPI:
+    if db_url is None or media_root is None:
+        config = get_config()
+        selected_db_url = config.db_url if db_url is None else db_url
+        selected_media_root = config.media_root if media_root is None else Path(media_root)
+    else:
+        selected_db_url = db_url
+        selected_media_root = Path(media_root)
+
+    selected_media_root = selected_media_root.expanduser().resolve()
 
     url = make_url(selected_db_url)
     if url.get_backend_name() == "sqlite" and url.database not in (None, "", ":memory:"):
@@ -22,6 +34,8 @@ def create_app(*, db_url: str | None = None) -> FastAPI:
 
     core.configure(selected_db_url)
     app = FastAPI(title="ytcrawln review")
+    app.state.media_root = selected_media_root
+    app.include_router(clips.router)
     app.include_router(videos.router)
 
     return app
