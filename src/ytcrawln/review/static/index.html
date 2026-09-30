@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>ytcrawln · 클립 검수</title>
-  <link rel="stylesheet" href="./review.css">
+  <link rel="stylesheet" href="/static/review.css">
+  <script defer src="/static/review.js"></script>
 </head>
 <body>
-  <!-- Static design preview. All data below is illustrative; no API or script is connected. -->
+  <!-- Candidate selection and the player use live data; metadata and clip playback are added separately. -->
   <div class="app-shell">
     <header class="page-header">
       <p class="eyebrow">FACE CLIP REVIEW</p>
@@ -19,77 +20,22 @@
       <div class="review-workspace">
         <nav class="panel candidate-panel" aria-labelledby="candidate-title">
           <div class="panel-heading">
-            <div class="heading-with-count"><h2 id="candidate-title">검수 대상</h2><span class="count-badge">8</span></div>
+            <div class="heading-with-count"><h2 id="candidate-title">검수 대상</h2><span class="count-badge" id="clip-count">—</span></div>
           </div>
-          <ol class="candidate-list" id="clip-list">
-            <li>
-              <button class="candidate" type="button" disabled>
-                <span class="candidate-number">01</span>
-                <span class="candidate-content"><span class="candidate-title">인터뷰 장면 · 예시 영상 A</span><span class="candidate-meta">영상 12 <span>프레임 30</span></span><span class="candidate-time">00:01.000 <span>검출</span></span></span>
-              </button>
-            </li>
-            <li>
-              <button class="candidate is-selected" type="button" aria-current="true" disabled>
-                <span class="candidate-number">02</span>
-                <span class="candidate-content"><span class="candidate-title">인터뷰 장면 · 예시 영상 A</span><span class="candidate-meta">영상 12 <span>프레임 600</span></span><span class="candidate-time">00:20.000 <span>검출</span></span></span>
-                <span class="selection-dot" aria-hidden="true"></span>
-              </button>
-            </li>
-            <li>
-              <button class="candidate" type="button" disabled>
-                <span class="candidate-number">03</span>
-                <span class="candidate-content"><span class="candidate-title">인터뷰 장면 · 예시 영상 A</span><span class="candidate-meta">영상 12 <span>프레임 1140</span></span><span class="candidate-time">00:38.000 <span>검출</span></span></span>
-              </button>
-            </li>
-            <li>
-              <button class="candidate" type="button" disabled>
-                <span class="candidate-number">04</span>
-                <span class="candidate-content"><span class="candidate-title">발표 장면 · 예시 영상 B</span><span class="candidate-meta">영상 18 <span>프레임 90</span></span><span class="candidate-time">00:03.000 <span>검출</span></span></span>
-              </button>
-            </li>
-            <li>
-              <button class="candidate" type="button" disabled>
-                <span class="candidate-number">05</span>
-                <span class="candidate-content"><span class="candidate-title">발표 장면 · 예시 영상 B</span><span class="candidate-meta">영상 18 <span>프레임 420</span></span><span class="candidate-time">00:14.000 <span>검출</span></span></span>
-              </button>
-            </li>
-            <li>
-              <button class="candidate" type="button" disabled>
-                <span class="candidate-number">06</span>
-                <span class="candidate-content"><span class="candidate-title">대화 장면 · 예시 영상 C</span><span class="candidate-meta">영상 24 <span>프레임 210</span></span><span class="candidate-time">00:07.000 <span>검출</span></span></span>
-              </button>
-            </li>
-            <li>
-              <button class="candidate" type="button" disabled>
-                <span class="candidate-number">07</span>
-                <span class="candidate-content"><span class="candidate-title">대화 장면 · 예시 영상 C</span><span class="candidate-meta">영상 24 <span>프레임 660</span></span><span class="candidate-time">00:22.000 <span>검출</span></span></span>
-              </button>
-            </li>
-            <li>
-              <button class="candidate" type="button" disabled>
-                <span class="candidate-number">08</span>
-                <span class="candidate-content"><span class="candidate-title">세로 촬영 · 예시 영상 D</span><span class="candidate-meta">영상 31 <span>프레임 60</span></span><span class="candidate-time">00:02.000 <span>검출</span></span></span>
-              </button>
-            </li>
-          </ol>
+          <p class="candidate-list-message" id="clip-list-message" role="status" aria-live="polite">목록을 불러오는 중입니다.</p>
+          <ol class="candidate-list" id="clip-list" aria-busy="true"></ol>
         </nav>
 
         <section class="panel player-panel" aria-label="영상 플레이어">
           <div class="video-stage">
-            <video id="video-player" preload="none" aria-label="선택한 원본 영상"></video>
+            <video id="video-player" controls preload="metadata" playsinline hidden aria-label="선택한 원본 영상"></video>
             <div class="stage-labels"><span class="stage-badge">원본 영상</span><span class="aspect-label">16:9</span></div>
-            <div class="video-placeholder" id="player-message">
+            <div class="video-placeholder" id="player-message" role="status" aria-live="polite">
               <span class="video-placeholder-icon" aria-hidden="true">
                 <svg viewBox="0 0 48 48" fill="none"><rect x="7" y="10" width="34" height="28" rx="5" stroke="currentColor" stroke-width="1.5"/><path d="m21 18 9 6-9 6V18Z" fill="currentColor"/></svg>
               </span>
-              <p>선택한 원본 영상</p>
-              <span>영상이 연결되면 이곳에 표시됩니다.</span>
-            </div>
-            <div class="player-controls-preview" aria-label="영상 컨트롤 디자인 예시">
-              <svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 11 7L6 17V3Z" fill="currentColor"/></svg>
-              <span class="player-clock">00:17 <span>/ 01:00</span></span>
-              <span class="player-progress" aria-hidden="true"><span></span></span>
-              <svg class="icon volume-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M9 4 5 7H2v6h3l4 3V4Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M12 7a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              <p id="player-message-title">검수 대상을 선택해 주세요.</p>
+              <span id="player-message-detail">왼쪽 목록에서 후보를 선택하면 원본 영상을 불러옵니다.</span>
             </div>
           </div>
 
