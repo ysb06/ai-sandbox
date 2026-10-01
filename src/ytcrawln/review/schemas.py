@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class ClipItem(BaseModel):
+    id: int
     video_ref_id: int
     frame: int
     time_sec: float

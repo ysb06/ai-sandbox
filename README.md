@@ -26,6 +26,30 @@ WhisperX 화자 분리에는 실행 환경의 `HF_TOKEN`이 필요합니다.
 | `pdm run python -m ytcrawl.analysis.video_to_text` | 아직 `minicpm-v4.6` 분석 기록이 없는 로컬 영상을 순차 분석하고, 영상마다 결과를 `video_vtt_analysis`에 저장합니다. |
 | `pdm run python -m whistt INPUT_PATH OUTPUT_DIR` | 오디오 또는 영상 파일을 WhisperX로 전사·정렬하고 화자를 분리합니다. `--no-diarization`으로 화자 분리를 생략할 수 있습니다. |
 
+## ytcrawln 검수 후보 등록
+
+얼굴 분석을 마친 뒤 프로젝트 루트에서 다음 명령을 실행합니다.
+
+```bash
+pdm run python -m ytcrawln.db.importers.clip_candidates
+```
+
+기본 설정은 `config_ytcrawln.yaml`이며 `--config`로 다른 설정 파일을 지정할 수
+있습니다. 기존 DB의 `face_in_videos` 전체에서 `(video_ref_id, frame)`별로 묶고,
+`MIN(time_sec)`를 기준 시각으로 복사하여 `clip_candidates`에 저장합니다.
+후보 테이블이 없으면 생성하며, 재실행 시 기존 후보의 ID와 시각은 유지하고
+새 후보만 추가합니다. 완료 후 원본 고유 후보 수, 신규 등록 수, 기존 후보 수를 출력합니다.
+
+얼굴 분석과 DB 초기화는 후보를 자동 등록하지 않습니다. Review의 `/clips`는
+저장된 후보만 조회하므로, 최초 전환 시 위 명령을 실행한 뒤 Review 서버를
+재시작하고 페이지를 새로고침합니다. 이후 분석 결과가 추가되면 같은 명령을
+재실행하고 페이지를 새로고침합니다. 분석과 등록 명령은 순서대로 실행합니다.
+등록 실패 시 이번 실행의 미커밋 삽입은 롤백되며 같은 명령으로 재시도할 수 있습니다.
+
+등록된 후보는 얼굴 분석 결과를 변경하거나 삭제해도 유지됩니다. 후보가 남아 있는
+동안 `videos.id`를 다른 원본 영상에 재사용하지 않아야 합니다. 영상 파일 추출과
+Review 판정 저장은 이 명령의 기능에 포함되지 않습니다.
+
 ## 보조 CLI
 
 영상 분석은 기본적으로 1초 간격으로 프레임을 선택하고 영상당 앞의 3개 배치를

@@ -14,13 +14,13 @@ from ytcrawln.db import core
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Initialize the ytcrawln videos and videos_detail tables.",
+        description="Initialize the ytcrawln video, face, and clip candidate tables.",
     )
     parser.add_argument(
         "--config",
         type=Path,
         default=DEFAULT_CONFIG_PATH,
-        help="Configuration file (default: project config.yaml).",
+        help="Configuration file (default: project config_ytcrawln.yaml).",
     )
     args = parser.parse_args(argv)
 
@@ -38,7 +38,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     print(f"Database initialized: {config.db_path.resolve()}")
-    print("Tables ensured: videos, videos_detail")
+    print("Tables ensured: videos, videos_detail, face_in_videos, clip_candidates")
     return 0
 
 

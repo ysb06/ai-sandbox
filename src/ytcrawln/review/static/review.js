@@ -403,6 +403,7 @@ function createCandidate(clip, index) {
   const button = document.createElement("button");
   button.className = "candidate";
   button.type = "button";
+  button.dataset.clipId = clip.id;
   button.dataset.videoRefId = clip.video_ref_id;
   button.dataset.frame = clip.frame;
   button.addEventListener("click", () => selectCandidate(clip, button));
@@ -422,6 +423,7 @@ function createCandidate(clip, index) {
 
 function isClipItem(clip) {
   return clip !== null && typeof clip === "object"
+    && Number.isInteger(clip.id) && clip.id > 0
     && Number.isInteger(clip.video_ref_id)
     && Number.isInteger(clip.frame)
     && Number.isFinite(clip.time_sec) && clip.time_sec >= 0
@@ -434,9 +436,16 @@ async function loadClips() {
   clipListMessage.hidden = false;
   clipListMessage.textContent = "목록을 불러오는 중입니다.";
 
+  let failureMessage = "목록을 불러오지 못했습니다. 페이지를 새로고침해 주세요.";
   try {
     const response = await fetch("/clips");
     if (!response.ok) {
+      if (response.status === 503) {
+        const problem = await response.json();
+        if (typeof problem?.detail === "string" && problem.detail.trim()) {
+          failureMessage = problem.detail;
+        }
+      }
       throw new Error(`Clip list request failed: ${response.status}`);
     }
     const data = await response.json();
@@ -456,7 +465,7 @@ async function loadClips() {
     clipList.replaceChildren();
     clipCount.textContent = "—";
     clipListMessage.hidden = false;
-    clipListMessage.textContent = "목록을 불러오지 못했습니다. 페이지를 새로고침해 주세요.";
+    clipListMessage.textContent = failureMessage;
     console.error("Failed to load review candidates", error);
   } finally {
     clipList.setAttribute("aria-busy", "false");

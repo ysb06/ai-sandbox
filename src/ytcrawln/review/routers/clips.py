@@ -9,5 +9,5 @@ router = APIRouter()
 def get_clips_list() -> schemas.ClipListResponse:
     try:
         return service.list_clips()
-    except service.ClipDataError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except service.ClipCandidatesNotInitializedError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -1,11 +1,10 @@
-from math import isfinite
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from ytcrawln.db import core
-from ytcrawln.db.tables.face_in_video import FaceInVideo
+from ytcrawln.db.tables.clip_candidates import ClipCandidate
 from ytcrawln.db.tables.videos import Videos
 from ytcrawln.db.tables.videos_detail import VideoDetail
 from ytcrawln.review.schemas import (
@@ -18,44 +17,40 @@ from ytcrawln.review.schemas import (
 )
 
 
-class ClipDataError(RuntimeError):
-    """A candidate has inconsistent or invalid detection timestamps."""
+class ClipCandidatesNotInitializedError(RuntimeError):
+    """The manual candidate registration command has not prepared the table."""
 
 
 def list_clips() -> ClipListResponse:
-    """Return every distinct video/frame candidate without changing the database."""
-    candidates = (
-        select(
-            FaceInVideo.video_ref_id,
-            FaceInVideo.frame,
-            func.min(FaceInVideo.time_sec).label("time_sec"),
-            func.max(FaceInVideo.time_sec).label("max_time_sec"),
-        )
-        .group_by(FaceInVideo.video_ref_id, FaceInVideo.frame)
-        .subquery()
-    )
+    """Return every stored clip candidate without changing the database."""
     statement = (
         select(
-            candidates.c.video_ref_id,
-            candidates.c.frame,
-            candidates.c.time_sec,
-            candidates.c.max_time_sec,
+            ClipCandidate.id,
+            ClipCandidate.video_ref_id,
+            ClipCandidate.frame,
+            ClipCandidate.time_sec,
             Videos.title,
         )
-        .select_from(candidates)
-        .outerjoin(Videos, Videos.id == candidates.c.video_ref_id)
-        .order_by(candidates.c.video_ref_id, candidates.c.frame)
+        .select_from(ClipCandidate)
+        .outerjoin(Videos, Videos.id == ClipCandidate.video_ref_id)
+        .order_by(ClipCandidate.video_ref_id, ClipCandidate.frame)
     )
 
     with Session(core.get_engine()) as session:
+        if not inspect(session.connection()).has_table(ClipCandidate.__tablename__):
+            raise ClipCandidatesNotInitializedError(
+                "검수 후보 테이블이 없습니다. 프로젝트 루트에서 "
+                "pdm run python -m ytcrawln.db.importers.clip_candidates "
+                "명령을 실행한 뒤 페이지를 새로고침해 주세요."
+            )
         items = []
         for row in session.execute(statement):
-            time_sec = row.time_sec
             items.append(
                 ClipItem(
+                    id=row.id,
                     video_ref_id=row.video_ref_id,
                     frame=row.frame,
-                    time_sec=time_sec,
+                    time_sec=row.time_sec,
                     title=row.title,
                 )
             )
