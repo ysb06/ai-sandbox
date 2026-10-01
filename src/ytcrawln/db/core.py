@@ -43,6 +43,7 @@ def create_all() -> None:
     """Create only the tables currently supported by ytcrawln."""
     from ytcrawln.db.tables import (
         clip_candidates,
+        clip_reviews,
         face_in_video,
         videos,
         videos_detail,
@@ -56,6 +57,7 @@ def create_all() -> None:
             videos_detail.VideoDetail.__table__,
             face_in_video.FaceInVideo.__table__,
             clip_candidates.ClipCandidate.__table__,
+            clip_reviews.ClipReview.__table__,
         ],
     )
 

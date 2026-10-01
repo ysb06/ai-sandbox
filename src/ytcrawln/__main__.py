@@ -14,7 +14,9 @@ from ytcrawln.db import core
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Initialize the ytcrawln video, face, and clip candidate tables.",
+        description=(
+            "Initialize the ytcrawln video, face, clip candidate, and review tables."
+        ),
     )
     parser.add_argument(
         "--config",
@@ -38,7 +40,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     print(f"Database initialized: {config.db_path.resolve()}")
-    print("Tables ensured: videos, videos_detail, face_in_videos, clip_candidates")
+    print(
+        "Tables ensured: videos, videos_detail, face_in_videos, "
+        "clip_candidates, clip_reviews"
+    )
     return 0
 
 
