@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="ko">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,21 +9,27 @@
   <link rel="stylesheet" href="/static/review.css">
   <script defer src="/static/review.js"></script>
 </head>
+
 <body>
   <!-- Candidates, metadata, and clip playback use the original video without creating clip files. -->
   <div class="app-shell">
     <header class="page-header">
-      <p class="eyebrow">FACE CLIP REVIEW</p>
-      <h1>클립 검수</h1>
+      <!-- <div class="page-title">
+        <p class="eyebrow">FACE CLIP REVIEW</p>
+        <h1>클립 검수</h1>
+      </div> -->
     </header>
 
     <main>
       <div class="review-workspace">
         <nav class="panel candidate-panel" aria-labelledby="candidate-title">
           <div class="panel-heading">
-            <div class="heading-with-count"><h2 id="candidate-title">검수 대상</h2><span class="count-badge" id="clip-count">—</span></div>
+            <div class="heading-with-count">
+              <h2 id="candidate-title">검수 대상</h2><span class="count-badge" id="clip-count">—</span>
+            </div>
           </div>
           <p class="candidate-list-message" id="clip-list-message" role="status" aria-live="polite">목록을 불러오는 중입니다.</p>
+          <button class="button list-retry" id="clip-list-retry" type="button" hidden>목록 다시 불러오기</button>
           <ol class="candidate-list" id="clip-list" aria-busy="true"></ol>
         </nav>
 
@@ -32,7 +39,10 @@
             <!-- <div class="stage-labels"><span class="stage-badge">원본 영상</span><span class="aspect-label">16:9</span></div> -->
             <div class="video-placeholder" id="player-message" role="status" aria-live="polite">
               <span class="video-placeholder-icon" aria-hidden="true">
-                <svg viewBox="0 0 48 48" fill="none"><rect x="7" y="10" width="34" height="28" rx="5" stroke="currentColor" stroke-width="1.5"/><path d="m21 18 9 6-9 6V18Z" fill="currentColor"/></svg>
+                <svg viewBox="0 0 48 48" fill="none">
+                  <rect x="7" y="10" width="34" height="28" rx="5" stroke="currentColor" stroke-width="1.5" />
+                  <path d="m21 18 9 6-9 6V18Z" fill="currentColor" />
+                </svg>
               </span>
               <p id="player-message-title">검수 대상을 선택해 주세요.</p>
               <span id="player-message-detail">왼쪽 목록에서 후보를 선택하면 원본 영상을 불러옵니다.</span>
@@ -41,7 +51,9 @@
 
           <div class="clip-actions">
             <button class="clip-play-button" id="clip-play-button" type="button" disabled>
-              <svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 11 7L6 17V3Z" fill="currentColor"/></svg>
+              <svg class="icon" viewBox="0 0 20 20" aria-hidden="true">
+                <path d="m6 3 11 7L6 17V3Z" fill="currentColor" />
+              </svg>
               클립 재생
             </button>
             <p class="clip-playback-message" id="clip-playback-message" role="status" aria-live="polite" hidden></p>
@@ -49,10 +61,14 @@
         </section>
 
         <aside class="panel info-panel" aria-labelledby="info-title">
-          <div class="panel-heading"><h2 id="info-title">영상 정보</h2></div>
+          <div class="panel-heading">
+            <h2 id="info-title">영상 정보</h2>
+          </div>
           <div class="info-tabs" role="tablist" aria-label="영상 정보 탭">
-            <button class="info-tab is-active" id="overview-tab" type="button" role="tab" aria-selected="true" aria-controls="overview-panel" tabindex="0">개요</button>
-            <button class="info-tab" id="detail-tab" type="button" role="tab" aria-selected="false" aria-controls="detail-panel" tabindex="-1">상세</button>
+            <button class="info-tab is-active" id="overview-tab" type="button" role="tab" aria-selected="true"
+              aria-controls="overview-panel" tabindex="0">개요</button>
+            <button class="info-tab" id="detail-tab" type="button" role="tab" aria-selected="false"
+              aria-controls="detail-panel" tabindex="-1">상세</button>
           </div>
           <div class="metadata-scroll" id="metadata-content" aria-busy="false">
             <p class="metadata-message" id="metadata-message" role="status" aria-live="polite">검수 대상을 선택해 주세요.</p>
@@ -62,14 +78,90 @@
         </aside>
       </div>
 
-      <section class="panel review-records" aria-labelledby="review-records-title">
-        <div class="records-heading"><h2 id="review-records-title">Review 기록</h2><span class="neutral-badge">준비 중</span></div>
-        <div class="records-placeholder">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M9 3h6v3H9V3Zm0 8h6m-6 4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <div><p>검수 기록을 위한 공간입니다.</p><span>판정과 메모는 다음 단계에서 추가됩니다.</span></div>
+      <section class="panel review-records" aria-labelledby="review-title">
+        <div class="records-heading">
+          <div>
+            <h2 id="review-title">Review Clip</h2>
+          </div>
+          <div class="reviewer-controls">
+            <form class="reviewer-form" id="reviewer-form" autocomplete="off">
+              <div class="reviewer-field">
+                <input id="reviewer-name" name="username" type="text" autocomplete="off" spellcheck="false"
+                  placeholder="검수자 username을 입력해 주세요" aria-label="검수자 username" aria-describedby="reviewer-message">
+              </div>
+              <button class="button button-primary" id="reviewer-apply" type="submit">적용</button>
+            </form>
+            <p class="status-message" id="reviewer-message" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+        <div class="review-content">
+          <div class="review-form-region">
+            <fieldset class="review-editor" id="review-editor" disabled>
+              <div class="review-editor-fields">
+                <div class="review-status-options" role="group" aria-label="클립 판정 선택">
+                  <button class="review-status-button" type="button" data-review-status="accepted"
+                    aria-pressed="false">적합</button>
+                  <button class="review-status-button" type="button" data-review-status="rejected"
+                    aria-pressed="false">부적합</button>
+                  <button class="review-status-button" type="button" data-review-status="needs_review"
+                    aria-pressed="false">보류</button>
+                </div>
+                <div class="review-note-field">
+                  <!-- <label class="review-note-label" for="review-note">메모 <span>선택 사항</span></label> -->
+                  <textarea id="review-note" name="note" rows="1" placeholder="판정에 참고할 내용을 남겨 주세요."></textarea>
+                </div>
+              </div>
+            </fieldset>
+            <div class="review-actions">
+              <button class="button" id="review-save" type="button" disabled>저장</button>
+              <button class="button button-primary" id="review-save-next" type="button" disabled>저장하고 다음</button>
+              <span class="review-save-state" id="review-save-state">저장된 판정 없음</span>
+            </div>
+            <p class="status-message" id="review-message" role="status" aria-live="polite">검수자 이름과 검수 대상을 선택해 주세요.</p>
+          </div>
+          <section class="review-history" aria-labelledby="review-records-title">
+            <div class="review-history-heading">
+              <h3 id="review-records-title">검수 기록</h3>
+              <!-- <p class="records-description">검수자별로 마지막에 저장한 판정과 메모를 표시합니다.</p> -->
+              <p class="status-message" id="review-records-message" role="status" aria-live="polite">검수 대상을 선택하면 기록을
+              불러옵니다.</p>
+            </div>
+            <button class="button records-retry" id="review-retry" type="button" hidden>기록 다시 불러오기</button>
+            <div class="review-table-scroll">
+              <table class="review-table" id="review-table" aria-label="선택한 클립의 검수자별 최신 판정 기록" hidden>
+                <colgroup>
+                  <col class="reviewer-column">
+                  <col class="status-column">
+                  <col class="note-column">
+                  <col class="date-column">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col">검수자</th>
+                    <th scope="col">판정</th>
+                    <th scope="col">메모</th>
+                    <th scope="col">수정 시각</th>
+                  </tr>
+                </thead>
+                <tbody id="review-table-body"></tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </section>
     </main>
   </div>
+  <dialog class="unsaved-dialog" id="unsaved-dialog" aria-labelledby="unsaved-title"
+    aria-describedby="unsaved-description">
+    <h2 id="unsaved-title">저장하지 않은 변경사항이 있습니다.</h2>
+    <p id="unsaved-description">현재 판정과 메모를 저장한 뒤 이동하거나, 변경사항을 버리고 이동할 수 있습니다.</p>
+    <p class="status-message" id="unsaved-message" role="status" aria-live="polite"></p>
+    <div class="dialog-actions">
+      <button class="button button-primary" id="unsaved-save" type="button">저장 후 이동</button>
+      <button class="button button-danger" id="unsaved-discard" type="button">버리고 이동</button>
+      <button class="button" id="unsaved-cancel" type="button" autofocus>취소</button>
+    </div>
+  </dialog>
 </body>
+
 </html>

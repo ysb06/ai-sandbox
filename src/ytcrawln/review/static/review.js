@@ -15,6 +15,39 @@ const overviewPanel = document.getElementById("overview-panel");
 const detailPanel = document.getElementById("detail-panel");
 const infoTabs = [document.getElementById("overview-tab"), document.getElementById("detail-tab")];
 const infoPanels = [overviewPanel, detailPanel];
+const reviewerForm = document.getElementById("reviewer-form");
+const reviewerName = document.getElementById("reviewer-name");
+const reviewerApply = document.getElementById("reviewer-apply");
+const reviewerMessage = document.getElementById("reviewer-message");
+// const reviewProgress = document.getElementById("review-progress");
+const clipListRetry = document.getElementById("clip-list-retry");
+// const reviewSelection = document.getElementById("review-selection");
+const reviewEditor = document.getElementById("review-editor");
+const reviewNote = document.getElementById("review-note");
+const reviewSave = document.getElementById("review-save");
+const reviewSaveNext = document.getElementById("review-save-next");
+const reviewSaveState = document.getElementById("review-save-state");
+const reviewMessage = document.getElementById("review-message");
+const reviewRecordsMessage = document.getElementById("review-records-message");
+const reviewRetry = document.getElementById("review-retry");
+const reviewTable = document.getElementById("review-table");
+const reviewTableBody = document.getElementById("review-table-body");
+const reviewStatusButtons = [...document.querySelectorAll("[data-review-status]")];
+const unsavedDialog = document.getElementById("unsaved-dialog");
+const unsavedMessage = document.getElementById("unsaved-message");
+const unsavedSave = document.getElementById("unsaved-save");
+const unsavedDiscard = document.getElementById("unsaved-discard");
+const unsavedCancel = document.getElementById("unsaved-cancel");
+
+const REVIEWER_STORAGE_KEY = "ytcrawln.review.username";
+const REVIEW_LABELS = { accepted: "적합", rejected: "부적합", needs_review: "보류" };
+const candidateButtons = new Map();
+const listState = { items: [], status: "idle", requestId: 0, controller: null };
+const reviewState = {
+  username: null, clipId: null, status: "idle", records: [], saved: null,
+  draftStatus: null, draftNote: "", saving: false,
+  requestId: 0, controller: null, pendingTransition: null,
+};
 
 function selectInfoTab(index) {
   infoTabs.forEach((tab, tabIndex) => {
@@ -285,6 +318,9 @@ function selectCandidate(clip, button) {
   playerState.selectedButton = button;
   videoPlayer.setAttribute("aria-label", `영상 ${clip.video_ref_id}의 원본 영상`);
 
+  // Reviews belong to a candidate, even when its original video is reused below.
+  void loadReviews();
+
   // Keep both pending loads and connected media when only the candidate changes.
   if (playerState.videoRefId === clip.video_ref_id && playerState.status !== "error") {
     updateClipButton();
@@ -406,17 +442,26 @@ function createCandidate(clip, index) {
   button.dataset.clipId = clip.id;
   button.dataset.videoRefId = clip.video_ref_id;
   button.dataset.frame = clip.frame;
-  button.addEventListener("click", () => selectCandidate(clip, button));
+  button.addEventListener("click", () => requestTransition({ type: "candidate", clipId: clip.id }));
 
   const number = createSpan("candidate-number", String(index + 1).padStart(2, "0"));
   const content = createSpan("candidate-content", "");
-  const title = createSpan("candidate-title", clip.title?.trim() || "제목 없음");
+  const title = createSpan("candidate-title", "");
+  const titleText = createSpan("candidate-title-text", clip.title?.trim() || "제목 없음");
+  const badge = createSpan("candidate-review-badge", "");
+  title.append(badge, titleText);
   const metadata = createSpan("candidate-meta", `Clip ${clip.video_ref_id}`);
   // metadata.append(createSpan("", `#F ${clip.frame}`));
   const time = createSpan("candidate-time", formatDetectionTime(clip.time_sec));
   metadata.append(time);
   content.append(title, metadata);
   button.append(number, content);
+  candidateButtons.set(clip.id, button);
+  if (playerState.selectedClip?.id === clip.id) {
+    button.classList.add("is-selected");
+    button.setAttribute("aria-current", "true");
+    playerState.selectedButton = button;
+  }
   item.append(button);
   return item;
 }
@@ -430,47 +475,427 @@ function isClipItem(clip) {
     && (clip.title === null || typeof clip.title === "string");
 }
 
-async function loadClips() {
-  clipList.setAttribute("aria-busy", "true");
-  clipCount.textContent = "—";
-  clipListMessage.hidden = false;
-  clipListMessage.textContent = "목록을 불러오는 중입니다.";
+function normalizeNote(value) {
+  // Match Python str.strip() in ReviewSaveRequest, including its control separators.
+  return value.replace(/^[\p{White_Space}\u001c-\u001f]+|[\p{White_Space}\u001c-\u001f]+$/gu, "") || null;
+}
 
-  let failureMessage = "목록을 불러오지 못했습니다. 페이지를 새로고침해 주세요.";
+function validUsername(value) {
+  return typeof value === "string" && value.trim().length > 0
+    && [...value.trim()].length <= 128;
+}
+
+function isReviewItem(value) {
+  return value !== null && typeof value === "object"
+    && Number.isInteger(value.id) && value.id > 0
+    && Number.isInteger(value.clip_candidate_id) && value.clip_candidate_id > 0
+    && validUsername(value.username) && value.username === value.username.trim()
+    && Object.hasOwn(REVIEW_LABELS, value.status)
+    && (value.note === null || typeof value.note === "string")
+    && typeof value.created_at === "string" && Number.isFinite(Date.parse(value.created_at))
+    && typeof value.updated_at === "string" && Number.isFinite(Date.parse(value.updated_at));
+}
+
+async function requestJson(url, options, fallbackMessage) {
+  let response;
+  let data;
   try {
-    const response = await fetch("/clips");
-    if (!response.ok) {
-      if (response.status === 503) {
-        const problem = await response.json();
-        if (typeof problem?.detail === "string" && problem.detail.trim()) {
-          failureMessage = problem.detail;
-        }
-      }
-      throw new Error(`Clip list request failed: ${response.status}`);
-    }
-    const data = await response.json();
-    if (!Array.isArray(data?.items) || !data.items.every(isClipItem)) {
-      throw new Error("Invalid clip list response");
-    }
-
-    const fragment = document.createDocumentFragment();
-    data.items.forEach((clip, index) => {
-      fragment.append(createCandidate(clip, index));
-    });
-    clipList.replaceChildren(fragment);
-    clipCount.textContent = String(data.items.length);
-    clipListMessage.textContent = data.items.length === 0 ? "검수 대상이 없습니다." : "";
-    clipListMessage.hidden = data.items.length > 0;
+    response = await fetch(url, options);
+    data = await response.json();
   } catch (error) {
-    clipList.replaceChildren();
-    clipCount.textContent = "—";
-    clipListMessage.hidden = false;
-    clipListMessage.textContent = failureMessage;
-    console.error("Failed to load review candidates", error);
+    if (error.name === "AbortError") throw error;
+    throw new Error(fallbackMessage);
+  }
+  if (!response.ok) {
+    const message = typeof data?.detail === "string" && data.detail.trim()
+      ? data.detail : response.status === 422
+        ? "검수자 이름과 판정을 확인해 주세요." : fallbackMessage;
+    throw new Error(message);
+  }
+  return data;
+}
+
+function setReviewMessage(message = "", isError = false) {
+  reviewMessage.textContent = message;
+  reviewMessage.classList.toggle("is-error", isError);
+}
+
+function isReviewDirty() {
+  return reviewState.draftStatus !== (reviewState.saved?.status ?? null)
+    || normalizeNote(reviewState.draftNote) !== normalizeNote(reviewState.saved?.note ?? "");
+}
+
+function reviewIsReady() {
+  return Boolean(reviewState.username) && listState.status === "ready"
+    && reviewState.status === "ready" && reviewState.clipId === playerState.selectedClip?.id;
+}
+
+function updateReviewControls() {
+  const locked = reviewState.saving || Boolean(reviewState.pendingTransition);
+  const editable = reviewIsReady() && !locked;
+  reviewEditor.disabled = !editable;
+  reviewSave.disabled = !editable || !reviewState.draftStatus;
+  reviewSaveNext.disabled = reviewSave.disabled;
+  reviewerName.disabled = locked;
+  reviewerApply.disabled = locked;
+  reviewerApply.textContent = reviewState.username ? "변경 적용" : "적용";
+  clipListRetry.disabled = locked || listState.status === "loading";
+  reviewRetry.disabled = locked || listState.status !== "ready";
+  for (const button of candidateButtons.values()) {
+    button.disabled = locked || listState.status !== "ready";
+  }
+  reviewStatusButtons.forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.reviewStatus === reviewState.draftStatus));
+  });
+  unsavedSave.disabled = reviewState.saving || !reviewIsReady() || !reviewState.draftStatus;
+  unsavedDiscard.disabled = reviewState.saving;
+  unsavedCancel.disabled = reviewState.saving;
+  reviewSaveState.textContent = reviewState.saving ? "저장 중…"
+    : isReviewDirty() ? "저장하지 않은 변경"
+      : !reviewState.username ? "검수자 이름을 적용해 주세요."
+        : !playerState.selectedClip ? "후보를 선택해 주세요."
+          : listState.status !== "ready" || reviewState.status !== "ready" ? "검수 상태 확인 필요"
+            : reviewState.saved ? "저장됨" : "미검수";
+}
+
+function updateListReviews() {
+  const known = Boolean(reviewState.username) && listState.status === "ready";
+  let completed = 0;
+  let held = 0;
+  listState.items.forEach(clip => {
+    const status = clip.my_review?.status;
+    if (status === "accepted" || status === "rejected") completed += 1;
+    if (status === "needs_review") held += 1;
+    const badge = candidateButtons.get(clip.id)?.querySelector(".candidate-review-badge");
+    if (!badge) return;
+    badge.hidden = !reviewState.username;
+    badge.dataset.status = known ? status ?? "unreviewed" : "unknown";
+    badge.textContent = known ? REVIEW_LABELS[status] ?? "미검수" : "확인 필요";
+  });
+  // reviewProgress.textContent = !reviewState.username ? "이름을 적용하면 내 검수 진행을 표시합니다."
+  //   : known ? `내 검수 완료 ${completed} / ${listState.items.length} · 보류 ${held}`
+  //     : "내 검수 진행을 확인할 수 없습니다.";
+}
+
+function renderReviewRecords() {
+  reviewTableBody.replaceChildren();
+  reviewTable.hidden = reviewState.status !== "ready" || reviewState.records.length === 0;
+  if (reviewState.status !== "ready") return;
+  reviewRecordsMessage.textContent = reviewState.records.length ? "검수자별 최신 판정입니다." : "저장된 검수 기록이 없습니다.";
+  reviewRecordsMessage.classList.remove("is-error");
+  const fragment = document.createDocumentFragment();
+  reviewState.records.forEach(review => {
+    const row = document.createElement("tr");
+    for (const value of [review.username, REVIEW_LABELS[review.status], review.note ?? "—", new Date(review.updated_at).toLocaleString()]) {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    }
+    fragment.append(row);
+  });
+  reviewTableBody.append(fragment);
+}
+
+function resetReview() {
+  reviewState.controller?.abort();
+  reviewState.controller = null;
+  reviewState.requestId += 1;
+  reviewState.clipId = playerState.selectedClip?.id ?? null;
+  reviewState.status = "idle";
+  reviewState.records = [];
+  reviewState.saved = null;
+  reviewState.draftStatus = null;
+  reviewState.draftNote = "";
+  reviewNote.value = "";
+  // reviewSelection.textContent = reviewState.clipId === null ? "후보를 선택해 주세요." : `후보 ${reviewState.clipId}`;
+  reviewRecordsMessage.textContent = reviewState.clipId === null ? "후보를 선택하면 검수 기록을 표시합니다." : "검수 기록을 불러오는 중입니다.";
+  reviewRecordsMessage.classList.remove("is-error");
+  reviewRetry.hidden = true;
+  setReviewMessage();
+  renderReviewRecords();
+  updateReviewControls();
+}
+
+async function loadReviews() {
+  if (reviewState.saving) return;
+  resetReview();
+  const clipId = reviewState.clipId;
+  if (clipId === null || listState.status !== "ready") return;
+  const username = reviewState.username;
+  const requestId = reviewState.requestId;
+  const controller = new AbortController();
+  reviewState.controller = controller;
+  reviewState.status = "loading";
+  updateReviewControls();
+  const isCurrent = () => requestId === reviewState.requestId && !controller.signal.aborted
+    && username === reviewState.username && clipId === playerState.selectedClip?.id;
+  try {
+    const data = await requestJson(`/clips/${clipId}/reviews`, { signal: controller.signal }, "검수 기록을 불러오지 못했습니다. 다시 시도해 주세요.");
+    if (!isCurrent()) return;
+    if (data?.clip_candidate_id !== clipId || !Array.isArray(data.items)
+      || !data.items.every(item => isReviewItem(item) && item.clip_candidate_id === clipId)
+      || new Set(data.items.map(item => item.username)).size !== data.items.length) {
+      throw new Error("검수 기록 응답을 확인할 수 없습니다. 다시 시도해 주세요.");
+    }
+    reviewState.records = data.items;
+    reviewState.saved = data.items.find(item => item.username === username) ?? null;
+    reviewState.draftStatus = reviewState.saved?.status ?? null;
+    reviewState.draftNote = reviewState.saved?.note ?? "";
+    reviewNote.value = reviewState.draftNote;
+    reviewState.status = "ready";
+    if (username) playerState.selectedClip.my_review = reviewState.saved;
+    renderReviewRecords();
+    updateListReviews();
+  } catch (error) {
+    if (!isCurrent()) return;
+    reviewState.status = "error";
+    reviewRecordsMessage.textContent = error.message;
+    reviewRecordsMessage.classList.add("is-error");
+    reviewRetry.hidden = false;
   } finally {
-    clipList.setAttribute("aria-busy", "false");
+    if (isCurrent()) {
+      reviewState.controller = null;
+      updateReviewControls();
+    }
   }
 }
 
-// This script is deferred: the DOM is ready, and each page load fetches once.
-loadClips();
+function clearMissingSelection() {
+  cancelClipPlayback(true);
+  playerState.requestController?.abort();
+  playerState.mediaController?.abort();
+  playerState.requestId += 1;
+  playerState.selectedClip = null;
+  playerState.selectedButton = null;
+  playerState.videoRefId = null;
+  playerState.status = "idle";
+  videoPlayer.removeAttribute("src");
+  videoPlayer.load();
+  showPlayerMessage("검수 대상을 선택해 주세요.", "선택했던 후보가 목록에 없습니다.");
+  showMetadataMessage("검수 대상을 선택해 주세요.");
+  resetReview();
+}
+
+async function loadClips() {
+  if (reviewState.saving || isReviewDirty()) return;
+  listState.controller?.abort();
+  const requestId = ++listState.requestId;
+  const controller = new AbortController();
+  const username = reviewState.username;
+  listState.controller = controller;
+  listState.status = "loading";
+  resetReview();
+  clipList.setAttribute("aria-busy", "true");
+  clipCount.textContent = "—";
+  clipListMessage.hidden = false;
+  clipListMessage.classList.remove("is-error");
+  clipListMessage.textContent = "목록을 불러오는 중입니다.";
+  clipListRetry.hidden = true;
+  updateListReviews();
+  updateReviewControls();
+  const isCurrent = () => requestId === listState.requestId && !controller.signal.aborted && username === reviewState.username;
+  try {
+    const query = username ? `?${new URLSearchParams({ username })}` : "";
+    const data = await requestJson(`/clips${query}`, { signal: controller.signal }, "목록을 불러오지 못했습니다. 다시 시도해 주세요.");
+    if (!isCurrent()) return;
+    if (!Array.isArray(data?.items) || !data.items.every(clip => isClipItem(clip)
+      && (clip.my_review === null || (username && isReviewItem(clip.my_review)
+        && clip.my_review.clip_candidate_id === clip.id && clip.my_review.username === username)))
+      || new Set(data.items.map(clip => clip.id)).size !== data.items.length) {
+      throw new Error("후보 목록 응답을 확인할 수 없습니다. 다시 시도해 주세요.");
+    }
+    // Keep object identity for the active frame callback while only the reviewer changes.
+    const existing = new Map(listState.items.map(clip => [clip.id, clip]));
+    listState.items = data.items.map(clip => Object.assign(existing.get(clip.id) ?? {}, clip));
+    listState.status = "ready";
+    candidateButtons.clear();
+    const fragment = document.createDocumentFragment();
+    listState.items.forEach((clip, index) => fragment.append(createCandidate(clip, index)));
+    clipList.replaceChildren(fragment);
+    if (playerState.selectedClip && !candidateButtons.has(playerState.selectedClip.id)) clearMissingSelection();
+    clipCount.textContent = String(listState.items.length);
+    clipListMessage.textContent = listState.items.length === 0 ? "검수 대상이 없습니다." : "";
+    clipListMessage.hidden = listState.items.length > 0;
+    updateListReviews();
+    if (playerState.selectedClip) void loadReviews();
+  } catch (error) {
+    if (!isCurrent()) return;
+    listState.status = "error";
+    clipListMessage.hidden = false;
+    clipListMessage.textContent = error.message;
+    clipListMessage.classList.add("is-error");
+    clipListRetry.hidden = false;
+    reviewRecordsMessage.textContent = "후보 목록을 다시 불러온 뒤 검수할 수 있습니다.";
+    updateListReviews();
+  } finally {
+    if (isCurrent()) {
+      listState.controller = null;
+      clipList.setAttribute("aria-busy", "false");
+      updateReviewControls();
+    }
+  }
+}
+
+function applyReviewer(username) {
+  reviewState.username = username;
+  reviewerName.value = username;
+  reviewerMessage.textContent = `현재 검수자: ${username}`;
+  reviewerMessage.classList.remove("is-error");
+  try {
+    localStorage.setItem(REVIEWER_STORAGE_KEY, username);
+  } catch {
+    reviewerMessage.textContent += " · 이 브라우저에서는 이름을 기억할 수 없습니다.";
+  }
+  void loadClips();
+}
+
+function performTransition(transition) {
+  if (transition.type === "username") {
+    applyReviewer(transition.username);
+  } else {
+    const clip = listState.items.find(item => item.id === transition.clipId);
+    const button = candidateButtons.get(transition.clipId);
+    if (clip && button) selectCandidate(clip, button);
+  }
+}
+
+function requestTransition(transition) {
+  if (reviewState.saving || reviewState.pendingTransition) return;
+  if (transition.type === "candidate" && listState.status !== "ready") return;
+  if (transition.type === "username" && transition.username === reviewState.username) {
+    reviewerName.value = reviewState.username;
+    return;
+  }
+  if (transition.type === "candidate" && transition.clipId === playerState.selectedClip?.id && isReviewDirty()) return;
+  if (isReviewDirty()) {
+    reviewState.pendingTransition = transition;
+    unsavedMessage.textContent = reviewState.draftStatus ? "" : "저장하려면 먼저 판정을 선택해 주세요.";
+    unsavedDialog.showModal();
+    updateReviewControls();
+    return;
+  }
+  performTransition(transition);
+}
+
+function closeUnsavedDialog() {
+  reviewState.pendingTransition = null;
+  unsavedDialog.close();
+  reviewerName.value = reviewState.username ?? "";
+  updateReviewControls();
+}
+
+async function saveReview() {
+  if (reviewState.saving || !reviewIsReady() || !reviewState.draftStatus) return false;
+  const clipId = reviewState.clipId;
+  const username = reviewState.username;
+  const payload = { username, status: reviewState.draftStatus, note: normalizeNote(reviewState.draftNote) };
+  // Invalidate reads started before this write so they cannot undo its UI result.
+  listState.controller?.abort();
+  listState.requestId += 1;
+  reviewState.controller?.abort();
+  reviewState.requestId += 1;
+  reviewState.saving = true;
+  setReviewMessage("저장 중입니다.");
+  unsavedMessage.textContent = "저장 중입니다.";
+  updateReviewControls();
+  try {
+    const saved = await requestJson(`/clips/${clipId}/review`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    }, "저장 결과를 확인하지 못했습니다. 입력은 유지됩니다. 다시 저장해 주세요.");
+    if (!isReviewItem(saved) || saved.clip_candidate_id !== clipId || saved.username !== username) {
+      throw new Error("저장 응답을 확인할 수 없습니다. 입력은 유지됩니다. 다시 저장해 주세요.");
+    }
+    reviewState.saved = saved;
+    reviewState.draftStatus = saved.status;
+    reviewState.draftNote = saved.note ?? "";
+    reviewNote.value = reviewState.draftNote;
+    reviewState.records = reviewState.records.filter(item => item.username !== username).concat(saved)
+      .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at) || right.id - left.id);
+    const clip = listState.items.find(item => item.id === clipId);
+    if (clip) clip.my_review = saved;
+    renderReviewRecords();
+    updateListReviews();
+    setReviewMessage("저장했습니다.");
+    return true;
+  } catch (error) {
+    setReviewMessage(error.message, true);
+    unsavedMessage.textContent = error.message;
+    return false;
+  } finally {
+    reviewState.saving = false;
+    updateReviewControls();
+  }
+}
+
+reviewerForm.addEventListener("submit", event => {
+  event.preventDefault();
+  if (!validUsername(reviewerName.value)) {
+    reviewerMessage.textContent = "검수자 이름을 1~128자로 입력해 주세요.";
+    reviewerMessage.classList.add("is-error");
+    return;
+  }
+  requestTransition({ type: "username", username: reviewerName.value.trim() });
+});
+reviewStatusButtons.forEach(button => button.addEventListener("click", () => {
+  if (!reviewIsReady() || reviewState.saving || reviewState.pendingTransition) return;
+  reviewState.draftStatus = button.dataset.reviewStatus;
+  setReviewMessage();
+  updateReviewControls();
+}));
+reviewNote.addEventListener("input", () => {
+  reviewState.draftNote = reviewNote.value;
+  setReviewMessage();
+  updateReviewControls();
+});
+reviewSave.addEventListener("click", () => { void saveReview(); });
+reviewSaveNext.addEventListener("click", async () => {
+  if (!await saveReview()) return;
+  const index = listState.items.findIndex(clip => clip.id === reviewState.clipId);
+  const next = listState.items.slice(index + 1).find(clip => clip.my_review === null);
+  if (!next) {
+    setReviewMessage("저장했습니다. 뒤쪽에 미검수 후보가 없습니다.");
+    return;
+  }
+  performTransition({ type: "candidate", clipId: next.id });
+});
+clipListRetry.addEventListener("click", () => { void loadClips(); });
+reviewRetry.addEventListener("click", () => { void loadReviews(); });
+unsavedSave.addEventListener("click", async () => {
+  const transition = reviewState.pendingTransition;
+  if (!transition || !await saveReview()) return;
+  closeUnsavedDialog();
+  performTransition(transition);
+});
+unsavedDiscard.addEventListener("click", () => {
+  if (reviewState.saving) return;
+  const transition = reviewState.pendingTransition;
+  reviewState.draftStatus = reviewState.saved?.status ?? null;
+  reviewState.draftNote = reviewState.saved?.note ?? "";
+  reviewNote.value = reviewState.draftNote;
+  closeUnsavedDialog();
+  if (transition) performTransition(transition);
+});
+unsavedCancel.addEventListener("click", closeUnsavedDialog);
+unsavedDialog.addEventListener("cancel", event => {
+  event.preventDefault();
+  if (!reviewState.saving) closeUnsavedDialog();
+});
+window.addEventListener("beforeunload", event => {
+  if (!isReviewDirty() && !reviewState.saving) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
+
+try {
+  const savedUsername = localStorage.getItem(REVIEWER_STORAGE_KEY);
+  if (validUsername(savedUsername)) {
+    reviewState.username = savedUsername.trim();
+    reviewerName.value = reviewState.username;
+    reviewerMessage.textContent = `현재 검수자: ${reviewState.username}`;
+  }
+} catch {
+  reviewerMessage.textContent = "이름을 입력해 주세요. 이 브라우저에서는 이름을 기억할 수 없습니다.";
+}
+
+// Fetch the whole list once per applied reviewer; initial candidate selection stays manual.
+void loadClips();

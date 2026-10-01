@@ -13,8 +13,7 @@ from typing import Any
 
 import yaml
 from dotenv import load_dotenv
-from googleapiclient.errors import HttpError
-from sqlalchemy import inspect, select
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
