@@ -21,6 +21,7 @@ from ytcrawln.review.schemas import (
     VideoInfo,
     VideoMetadata,
 )
+from ytcrawln.utils import is_sftp_source
 
 
 class ClipCandidatesNotInitializedError(RuntimeError):
@@ -229,7 +230,7 @@ def resolve_media_path(video_ref_id: int, *, media_root: Path) -> Path | None:
 
 
 def _resolve_video_file_path(stored_path: str | None, media_root: Path) -> Path | None:
-    if not stored_path:
+    if not stored_path or is_sftp_source(stored_path):
         return None
 
     try:

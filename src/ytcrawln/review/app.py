@@ -7,6 +7,7 @@ from sqlalchemy.engine import make_url
 
 from ytcrawln.config import get_config
 from ytcrawln.db import core
+from ytcrawln.utils import is_sftp_source
 
 from .routers import clips, videos
 
@@ -21,12 +22,17 @@ def create_app(
     if db_url is None or media_root is None:
         config = get_config()
         selected_db_url = config.db_url if db_url is None else db_url
-        selected_media_root = config.media_root if media_root is None else Path(media_root)
+        selected_media_root = config.media_root if media_root is None else media_root
     else:
         selected_db_url = db_url
-        selected_media_root = Path(media_root)
+        selected_media_root = media_root
 
-    selected_media_root = selected_media_root.expanduser().resolve()
+    if is_sftp_source(selected_media_root):
+        raise ValueError(
+            "Review supports local media files only; SFTP MEDIA_ROOT is supported "
+            "only by the video analysis commands. Set a local MEDIA_ROOT for Review."
+        )
+    selected_media_root = Path(selected_media_root).expanduser().resolve()
 
     url = make_url(selected_db_url)
     if url.get_backend_name() == "sqlite" and url.database not in (None, "", ":memory:"):

@@ -4,6 +4,8 @@ from pathlib import Path
 
 import yaml
 
+from ytcrawln.utils import is_sftp_source
+
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config_ytcrawln.yaml"
 DB_FILENAME = "ytcrawln.sqlite3"
 MEDIA_DIRNAME = "media"
@@ -15,7 +17,7 @@ BACKUP_DIRNAME = "Backup"
 class AppConfig:
     config_path: Path = field(repr=False, compare=False)
     data_root: Path
-    media_root: Path
+    media_root: str | Path
     review_host: str
     review_port: int
 
@@ -51,7 +53,11 @@ def get_config(
     data_root = Path(data_root_value).expanduser()
 
     media_root_value = _read_string(raw_config, "MEDIA_ROOT")
-    media_root = Path(media_root_value).expanduser()
+    media_root = (
+        media_root_value
+        if is_sftp_source(media_root_value)
+        else Path(media_root_value).expanduser()
+    )
 
     return AppConfig(
         config_path=config_path,

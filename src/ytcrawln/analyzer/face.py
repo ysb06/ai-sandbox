@@ -1,6 +1,3 @@
-import argparse
-import sys
-from collections.abc import Sequence
 from contextlib import closing
 from pathlib import Path
 
@@ -10,12 +7,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from fascan.detector import UltraLightFaceDetector
 from fascan.pipeline import FrameDetectionResult, scan_container
-from ytcrawln.config import DEFAULT_CONFIG_PATH, get_config
 from ytcrawln.db.tables.face_in_video import FaceInVideo
 from ytcrawln.db.tables.videos import Videos
-from ytcrawln.utils import open_video_container
-
-DEFAULT_MODEL_PATH = DEFAULT_CONFIG_PATH.parent / "models" / "version-RFB-640.onnx"
+from ytcrawln.utils import open_video_container, resolve_video_source
 
 
 def select_face_results(
@@ -92,7 +86,6 @@ def analyze_pending_videos(
     show_progress: bool = False,
 ) -> int:
     database_path = Path(db_path).expanduser().resolve()
-    media_directory = Path(media_root).expanduser()
     engine = create_engine(URL.create("sqlite", database=str(database_path)))
     try:
         factory = sessionmaker(bind=engine, expire_on_commit=False)
@@ -105,9 +98,7 @@ def analyze_pending_videos(
         detector = UltraLightFaceDetector(model_path=Path(model_path).expanduser())
         completed_videos = 0
         for video_ref_id, path in videos:
-            file_path = Path(path).expanduser()
-            if not file_path.is_absolute():
-                file_path = media_directory / file_path
+            file_path = resolve_video_source(media_root, path)
 
             with factory.begin() as session:
                 analyze_and_save_video(
@@ -178,77 +169,3 @@ def get_videos_without_faces(session: Session) -> list[tuple[int, str]]:
         for video_id, path in session.execute(statement)
         if path is not None
     ]
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Analyze local videos and save sampled face detections.",
-        epilog=(
-            "Run from the project root when using relative paths in the config. "
-            "Example: python -m ytcrawln.analyzer.face "
-            "--max-results 10 --interval 1.0 --show-progress"
-        ),
-    )
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=DEFAULT_CONFIG_PATH,
-        help="Configuration file (default: project config_ytcrawln.yaml).",
-    )
-    parser.add_argument(
-        "--max-results",
-        type=int,
-        required=True,
-        help="Maximum detected timestamps per video, not the number of face rows.",
-    )
-    parser.add_argument(
-        "--interval",
-        type=float,
-        default=1.0,
-        help="Frame sampling interval in seconds (default: 1.0).",
-    )
-    parser.add_argument(
-        "--model-path",
-        type=Path,
-        default=DEFAULT_MODEL_PATH,
-        help="ONNX model (default: project models/version-RFB-640.onnx).",
-    )
-    parser.add_argument(
-        "--show-progress",
-        action="store_true",
-        help="Show video analysis progress (disabled by default).",
-    )
-
-    try:
-        args = parser.parse_args(argv)
-        config_path = args.config.expanduser().resolve()
-        config = get_config(config_path)
-        db_path = config.db_path.expanduser().resolve()
-        media_root = config.media_root.expanduser().resolve()
-        model_path = args.model_path.expanduser().resolve()
-
-        try:
-            completed_videos = analyze_pending_videos(
-                db_path=db_path,
-                max_results=args.max_results,
-                media_root=media_root,
-                model_path=model_path,
-                interval=args.interval,
-                show_progress=args.show_progress,
-            )
-        except Exception as exc:
-            print(f"분석 실패: {exc}", file=sys.stderr)
-            return 1
-
-        print(f"처리 완료 영상 수: {completed_videos} (얼굴 0건 영상 포함)")
-        return 0
-    except KeyboardInterrupt:
-        print(
-            "사용자 요청으로 중단했습니다. 이미 commit된 영상은 유지됩니다.",
-            file=sys.stderr,
-        )
-        return 130
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
