@@ -26,6 +26,29 @@ WhisperX 화자 분리에는 실행 환경의 `HF_TOKEN`이 필요합니다.
 | `pdm run python -m ytcrawl.analysis.video_to_text` | 아직 `minicpm-v4.6` 분석 기록이 없는 로컬 영상을 순차 분석하고, 영상마다 결과를 `video_vtt_analysis`에 저장합니다. |
 | `pdm run python -m whistt INPUT_PATH OUTPUT_DIR` | 오디오 또는 영상 파일을 WhisperX로 전사·정렬하고 화자를 분리합니다. `--no-diarization`으로 화자 분리를 생략할 수 있습니다. |
 
+## ytcrawln ID 목록 등록
+
+한 줄에 YouTube ID 하나가 있는 UTF-8 파일로 영상과 상세 정보를 함께 등록합니다.
+`config_ytcrawln.yaml`의 DB와 테이블을 먼저 준비해야 하며, API 키는 환경변수 또는
+`.env`의 `YOUTUBE_API_KEY`를 사용합니다.
+
+```bash
+pdm run python -m ytcrawln.crawler.youtube.import_ids \
+  --ids-file inputs/youtube_ids.txt
+```
+
+`--config`로 다른 설정 파일을 지정할 수 있습니다. 파일 내부 중복은 제거하지만,
+입력 ID 중 하나라도 DB에 이미 있으면 API 호출이나 저장 전에 전체 실행을 거부합니다.
+최대 50개씩 조회하고, 조회에 성공한 영상과 상세 정보를 같은 트랜잭션으로 저장합니다.
+새 영상의 `path`는 `vid_{ID}.mp4` 형식의 상대경로로 저장합니다.
+영상 다운로드나 해당 파일의 존재 여부 확인은 수행하지 않습니다.
+
+API 미반환·잘못된 영상은 사유를 출력하고 제외합니다. API 요청 또는 DB 배치가
+실패하면 중단하며, 이전에 완료한 배치는 보존합니다. 같은 DB에 대한 등록은 하나씩
+실행하고, 일부 완료 후 재시도할 때는 완료된 ID를 제외한 파일을 사용하세요.
+종료 코드는 성공 `0`, 일부 실패·미완료 `1`, 입력·설정·DB 준비·기존 ID 충돌 오류 `2`,
+사용자 중단 `130`입니다. 마지막에 입력·중복·등록·미반환·실패·미처리 건수를 출력합니다.
+
 ## ytcrawln 검수 후보 등록
 
 얼굴 분석을 마친 뒤 프로젝트 루트에서 다음 명령을 실행합니다.

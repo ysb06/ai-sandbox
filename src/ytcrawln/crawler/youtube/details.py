@@ -137,7 +137,10 @@ def extract_video_detail_values(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _map_response(response: Any, video_ids: Sequence[str]) -> dict[str, dict[str, Any]]:
+def map_video_detail_response(
+    response: Any, video_ids: Sequence[str]
+) -> dict[str, dict[str, Any]]:
+    """Validate a batch response and index actual items by requested video ID."""
     if not isinstance(response, dict) or not isinstance(response.get("items"), list):
         raise ValueError("Expected a video list response with an items array.")
     expected = set(video_ids)
@@ -239,7 +242,7 @@ def fill_missing_video_details(
             )
 
             try:
-                items = _map_response(response, batch_ids)
+                items = map_video_detail_response(response, batch_ids)
             except ValueError as exc:
                 print(f"Invalid API response: {exc}", file=sys.stderr)
                 result.failed_rows += batch_rows
