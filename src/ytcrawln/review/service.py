@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,15 +14,22 @@ from ytcrawln.db.tables.videos_detail import VideoDetail
 from ytcrawln.review.schemas import (
     ClipItem,
     ClipListResponse,
-    MediaInfo,
     ReviewItem,
     ReviewListResponse,
     ReviewSaveRequest,
-    VideoDetailResponse,
     VideoInfo,
     VideoMetadata,
 )
-from ytcrawln.utils import is_sftp_source
+from ytcrawln.utils import is_sftp_source, resolve_video_source
+
+
+@dataclass(frozen=True)
+class VideoDetailData:
+    """Detached metadata and source, with no active database session."""
+
+    video: VideoInfo
+    detail: VideoMetadata | None
+    source: str | Path | None
 
 
 class ClipCandidatesNotInitializedError(RuntimeError):
@@ -163,9 +171,9 @@ def save_clip_review(clip_id: int, request: ReviewSaveRequest) -> ReviewItem:
 def get_video_detail(
     video_ref_id: int,
     *,
-    media_root: Path,
-) -> VideoDetailResponse | None:
-    """Return stored metadata and local file availability for one video."""
+    media_root: str | Path,
+) -> VideoDetailData | None:
+    """Return metadata and a source; the caller checks media availability."""
     statement = (
         select(Videos, VideoDetail)
         .outerjoin(VideoDetail, VideoDetail.video_ref_id == Videos.id)
@@ -209,19 +217,17 @@ def get_video_detail(
         )
         stored_path = video.path
 
-    path = _resolve_video_file_path(stored_path, media_root)
-    return VideoDetailResponse(
+    return VideoDetailData(
         video=video_info,
         detail=detail_info,
-        media=MediaInfo(
-            available=path is not None,
-            url=f"/videos/media/{video_ref_id}" if path is not None else None,
-        ),
+        source=_resolve_video_file_path(stored_path, media_root),
     )
 
 
-def resolve_media_path(video_ref_id: int, *, media_root: Path) -> Path | None:
-    """Resolve an existing video file using the same rules as the detail API."""
+def resolve_media_path(
+    video_ref_id: int, *, media_root: str | Path
+) -> str | Path | None:
+    """Resolve a source after closing the DB; do not download or open media."""
     statement = select(Videos.path).where(Videos.id == video_ref_id)
     with Session(core.get_engine()) as session:
         stored_path = session.execute(statement).scalar_one_or_none()
@@ -229,15 +235,14 @@ def resolve_media_path(video_ref_id: int, *, media_root: Path) -> Path | None:
     return _resolve_video_file_path(stored_path, media_root)
 
 
-def _resolve_video_file_path(stored_path: str | None, media_root: Path) -> Path | None:
-    if not stored_path or is_sftp_source(stored_path):
+def _resolve_video_file_path(
+    stored_path: str | None, media_root: str | Path
+) -> str | Path | None:
+    if not stored_path:
         return None
 
     try:
-        path = Path(stored_path).expanduser()
-        if not path.is_absolute():
-            path = media_root.expanduser() / path
-        path = path.resolve()
-        return path if path.is_file() else None
+        source = resolve_video_source(media_root, stored_path)
+        return source if is_sftp_source(source) else Path(source).expanduser().resolve()
     except (OSError, RuntimeError, ValueError):
         return None

@@ -21,6 +21,7 @@ dependencies = [
     "SQLAlchemy>=2.0.0",
     "yt-dlp[default]>=2026.6.9",
     "fastapi[standard]>=0.138.2",
+    "asyncssh>=2.24,<3",
     "bgutil-ytdlp-pot-provider==1.3.2",
     "numpy>=2.4.6",
     "Pillow>=12.3.0",

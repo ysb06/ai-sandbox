@@ -9,6 +9,7 @@ from ytcrawln.utils import is_sftp_source
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config_ytcrawln.yaml"
 DB_FILENAME = "ytcrawln.sqlite3"
 MEDIA_DIRNAME = "media"
+CACHE_DIRNAME = "media-temp"
 TEMP_DIRNAME = "Temp"
 BACKUP_DIRNAME = "Backup"
 
@@ -30,6 +31,11 @@ class AppConfig:
     def db_url(self) -> str:
         """Return the SQLAlchemy URL for the configured SQLite file."""
         return f"sqlite:///{self.db_path.as_posix()}"
+
+    @property
+    def cache_root(self) -> Path:
+        """Return the persistent local cache for remote Review videos."""
+        return self.data_root / CACHE_DIRNAME
 
     @property
     def temp_root(self) -> Path:

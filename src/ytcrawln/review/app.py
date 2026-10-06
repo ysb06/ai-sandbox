@@ -18,21 +18,29 @@ def create_app(
     *,
     db_url: str | None = None,
     media_root: str | Path | None = None,
+    cache_root: str | Path | None = None,
 ) -> FastAPI:
     if db_url is None or media_root is None:
         config = get_config()
         selected_db_url = config.db_url if db_url is None else db_url
         selected_media_root = config.media_root if media_root is None else media_root
+        selected_cache_root = config.cache_root if cache_root is None else cache_root
     else:
         selected_db_url = db_url
         selected_media_root = media_root
+        selected_cache_root = cache_root
 
-    if is_sftp_source(selected_media_root):
+    if is_sftp_source(selected_media_root) and selected_cache_root is None:
         raise ValueError(
-            "Review supports local media files only; SFTP MEDIA_ROOT is supported "
-            "only by the video analysis commands. Set a local MEDIA_ROOT for Review."
+            "SFTP MEDIA_ROOT requires a local cache_root when db_url and "
+            "media_root are supplied explicitly."
         )
-    selected_media_root = Path(selected_media_root).expanduser().resolve()
+    if not is_sftp_source(selected_media_root):
+        selected_media_root = Path(selected_media_root).expanduser().resolve()
+    if selected_cache_root is not None:
+        if is_sftp_source(selected_cache_root):
+            raise ValueError("Review cache_root must be a local filesystem path.")
+        selected_cache_root = Path(selected_cache_root).expanduser().resolve()
 
     url = make_url(selected_db_url)
     if url.get_backend_name() == "sqlite" and url.database not in (None, "", ":memory:"):
@@ -45,6 +53,7 @@ def create_app(
     core.configure(selected_db_url)
     app = FastAPI(title="ytcrawln review")
     app.state.media_root = selected_media_root
+    app.state.cache_root = selected_cache_root
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(clips.router)
     app.include_router(videos.router)
