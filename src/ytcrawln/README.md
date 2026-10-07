@@ -113,3 +113,70 @@ DB 안의 완전한 SFTP URL을 사용할 경우에도 캐시 경로가 필요�
 
 실제 서버 접속과 브라우저 재생·탐색 확인은 운영자가 별도로 수행합니다.
 정적 검사 결과는 원격 접속이나 실제 재생 성공을 의미하지 않습니다.
+
+## YouTube ID 목록으로 DB 데이터 삭제
+
+한 줄에 YouTube ID 하나를 적은 UTF-8 텍스트 파일을 사용합니다. 형식은
+`inputs/youtube_ids.txt`와 같지만, 등록용 목록과 혼동하지 않도록 별도 삭제
+목록을 권장합니다. BOM·빈 줄·줄 양끝 공백은 허용하고, 중복 ID는 하나로
+묶습니다. 잘못된 ID나 빈 입력이 있으면 전체 실행을 거부합니다.
+
+기본 실행은 **읽기 전용 미리보기**입니다.
+
+```bash
+python -m ytcrawln.db.utils delete-videos --ids-file inputs/delete_youtube_ids.txt
+```
+
+출력된 DB 경로와 테이블별 삭제 예정 건수를 확인한 뒤 실제 삭제할 때만
+`--execute`를 지정합니다. 대화형 확인은 따로 하지 않습니다.
+
+```bash
+python -m ytcrawln.db.utils delete-videos --ids-file inputs/delete_youtube_ids.txt --execute
+```
+
+- `--config`로 다른 설정 파일을 지정할 수 있습니다. 기본값은 프로젝트의
+  `config_ytcrawln.yaml`이며 DB는 `DATA_ROOT/ytcrawln.sqlite3`입니다.
+- `videos.video_id`가 입력 ID와 일치하는 **모든 등록 행**을 대상으로 합니다.
+  DB PK인 `videos.id`를 입력하는 기능이 아닙니다.
+- 대상 클립의 `clip_reviews`를 먼저 삭제한 뒤 `clip_candidates`,
+  `face_in_videos`, `videos_detail`, `video_reviews`, `videos`를 정리합니다.
+  리뷰 작성자나 판정에 따른 예외는 없습니다.
+- `videos`는 필수이고, 나머지 관련 테이블은 실제 존재할 때만 처리합니다.
+  구버전의 `video_reviews`도 포함합니다. `clip_reviews`만 있고
+  `clip_candidates`가 없거나, 필수 연결 컬럼·PK가 다르면 실행을 거부합니다.
+- 지원하지 않는 외래 키 참조나 대상 테이블의 trigger가 발견되면 임의로
+  연쇄 삭제하지 않고 중단합니다. 테이블 추가 시 명시적 삭제 규칙도 갱신해야
+  합니다. 외래 키로 선언되지 않은 외부 테이블의 관계는 자동 추적하지 않습니다.
+- DB에 없는 ID는 보고하고 건너뜁니다. 모든 ID가 이미 삭제되었다면 변경 및
+  백업 없이 성공 종료합니다. DB 생성·스키마 변경·VACUUM은 하지 않습니다.
+- **실제 영상 파일, SFTP 원격 파일, `media-temp` 캐시는 삭제하지 않습니다.**
+  다른 호스트의 DB와 자동 동기화하지 않으며 API 키도 필요하지 않습니다.
+
+### 백업과 트랜잭션
+
+실제 삭제 대상이 있을 때 SQLite backup API로 다음 파일을 만들고
+`quick_check`를 통과한 경우에만 삭제합니다. 백업은 WAL에 의존하지 않는
+독립된 SQLite 파일이며 자동으로 삭제하지 않습니다.
+
+```text
+DATA_ROOT/Backup/ytcrawln-before-delete-<UTC timestamp>-<UUID>.sqlite3
+```
+
+대상 확인부터 commit까지 `BEGIN IMMEDIATE`로 다른 DB writer를 배제하며,
+백업은 별도 읽기 전용 연결에서 생성합니다. 모든 입력 ID의 관련 행 삭제는
+**하나의 트랜잭션**입니다. SQL은 작은 묶음으로 실행하지만 중간 commit은
+하지 않습니다. 실패·중단 시 미완료 트랜잭션은 rollback하고, 성공한 백업은
+보존합니다. 실행된 삭제 건수는 commit 이후에만 출력합니다.
+
+실행 전 crawler·Review·importer 중지는 운영자가 관리합니다. 프로세스를
+자동 검사하거나 중지하지 않습니다. 백업은 삭제 전 DB 전체이므로 복원하면
+백업 이후의 다른 변경도 되돌아갑니다. 자동 복원은 제공하지 않습니다.
+
+종료 코드는 성공·미리보기·대상 없음 `0`, 입력/config/DB 준비 오류 `2`,
+백업·삭제 오류 `1`, 사용자 중단 `130`입니다. `--help`는 config 없이 표시됩니다.
+
+프로그램 호출은 `ytcrawln.db.utils.preview_video_deletion(db_path, video_ids)`와
+`delete_videos(db_path, video_ids, backup_root=...)`를 사용합니다. 후자는 실제
+삭제 함수이며 항상 먼저 백업합니다. `backup_root`를 생략하면 DB 파일과
+같은 디렉터리 아래의 `Backup`을 사용합니다. 두 함수 모두
+`VideoDeletionResult`로 ID별 집계 정보와 테이블별 행 수를 반환합니다.

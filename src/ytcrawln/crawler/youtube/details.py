@@ -4,7 +4,6 @@ Crawl Step 02: 수집된 video 테이블에 나타난 영상들의 세부 정보
 
 import argparse
 import os
-import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -22,8 +21,7 @@ from ytcrawln.config import DEFAULT_CONFIG_PATH, get_config
 from ytcrawln.db import core
 from ytcrawln.db.tables.videos import Videos
 from ytcrawln.db.tables.videos_detail import VideoDetail
-
-VIDEO_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{11}")
+from ytcrawln.video_ids import VIDEO_ID_PATTERN
 
 
 class DetailImportValidationError(ValueError):

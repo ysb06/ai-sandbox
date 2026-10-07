@@ -18,12 +18,15 @@ from sqlalchemy.orm import Session, sessionmaker
 from ytcrawln.api.youtube import videos as youtube_videos
 from ytcrawln.config import DEFAULT_CONFIG_PATH, get_config
 from ytcrawln.crawler.youtube.details import (
-    VIDEO_ID_PATTERN,
     extract_video_detail_values,
     map_video_detail_response,
 )
 from ytcrawln.db.tables.videos import Videos
 from ytcrawln.db.tables.videos_detail import VideoDetail
+from ytcrawln.video_ids import VIDEO_ID_PATTERN as VIDEO_ID_PATTERN
+from ytcrawln.video_ids import VideoIDValidationError
+from ytcrawln.video_ids import read_video_ids as _read_video_ids
+from ytcrawln.video_ids import unique_video_ids
 
 DB_LOOKUP_BATCH_SIZE = 500
 
@@ -64,31 +67,18 @@ class VideoImportResult:
 
 def read_video_ids(path: str | Path) -> list[str]:
     """Read and validate every nonblank line, retaining duplicates for counting."""
-    values = Path(path).expanduser().read_text(encoding="utf-8-sig").splitlines()
-    ids = []
-    for number, line in enumerate(values, start=1):
-        video_id = line.strip()
-        if not video_id:
-            continue
-        if VIDEO_ID_PATTERN.fullmatch(video_id) is None:
-            raise VideoImportValidationError(
-                f"Invalid YouTube ID at line {number}: {video_id!r}."
-            )
-        ids.append(video_id)
-    if not ids:
-        raise VideoImportValidationError("The ID file contains no video IDs.")
-    return ids
+    try:
+        return _read_video_ids(path)
+    except VideoIDValidationError as exc:
+        raise VideoImportValidationError(str(exc)) from exc
 
 
 def _prepare_ids(video_ids: Sequence[str]) -> tuple[list[str], VideoImportResult]:
-    if isinstance(video_ids, (str, bytes)) or not video_ids:
-        raise VideoImportValidationError("Expected a nonempty sequence of YouTube IDs.")
-    unique: dict[str, None] = {}
-    for number, value in enumerate(video_ids, start=1):
-        if not isinstance(value, str) or VIDEO_ID_PATTERN.fullmatch(value) is None:
-            raise VideoImportValidationError(f"Invalid YouTube ID at position {number}.")
-        unique[value] = None
-    return list(unique), VideoImportResult(
+    try:
+        unique = unique_video_ids(video_ids)
+    except VideoIDValidationError as exc:
+        raise VideoImportValidationError(str(exc)) from exc
+    return unique, VideoImportResult(
         input_ids=len(video_ids),
         unique_ids=len(unique),
         duplicate_ids=len(video_ids) - len(unique),
