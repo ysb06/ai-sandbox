@@ -218,8 +218,7 @@ __pycache__/
 .DS_Store
 .vscode/
 .env
-/config.yaml
-/config_ytcrawln.yaml
+/config*.yaml
 results/
 inputs/
 outputs/

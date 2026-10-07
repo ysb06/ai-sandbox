@@ -100,6 +100,7 @@ def analyze_pending_videos(
         for video_ref_id, path in videos:
             file_path = resolve_video_source(media_root, path)
 
+            print(f"영상 {video_ref_id} 처리 중: {file_path}")
             with factory.begin() as session:
                 analyze_and_save_video(
                     video=(video_ref_id, file_path),
@@ -111,7 +112,6 @@ def analyze_pending_videos(
                 )
                 session.flush()
             completed_videos += 1
-            print(f"영상 {video_ref_id} 처리 완료: {file_path}")
 
         return completed_videos
     finally:
